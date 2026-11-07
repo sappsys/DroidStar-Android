@@ -331,9 +331,9 @@ macx:HEADERS += micpermission.h
 # Android letter of an upstream version: 0.45.07a, then b through z. A new upstream
 # version starts again at a. Package code is the upstream number times 100, plus the
 # letter index (a is 1): 0.45.07a is 450701, 0.45.08a is 450801.
-android:ANDROID_VERSION_NAME = 0.45.07a
-android:ANDROID_VERSION_CODE = 450701
-android:DEFINES += APP_VERSION=\\\"0.45.07a\\\"
+android:ANDROID_VERSION_NAME = 0.45.07b
+android:ANDROID_VERSION_CODE = 450702
+android:DEFINES += APP_VERSION=\\\"0.45.07b\\\"
 android:ANDROID_MIN_SDK_VERSION = 31
 android:ANDROID_TARGET_SDK_VERSION = 34
 android:ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android

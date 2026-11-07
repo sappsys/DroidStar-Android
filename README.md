@@ -1,6 +1,6 @@
 # DroidStar Android
 
-Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. This Android release is **0.45.07a**.
+Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. This Android line is at **0.45.07b** (public release **0.45.07a**).
 
 DroidStar is a free, GPL digital ham radio app: DMR on BrandMeister, YSF, M17, P25, NXDN, D-STAR, and AllStar. You need an amateur licence. The phone talks to the network the way a hotspot would.
 
@@ -16,7 +16,7 @@ The iOS app, TestFlight invites, and that changelog stay with VU3LVO. Questions 
 
 ## What this line does
 
-- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of Android 0.45.07a.
+- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of Android 0.45.07a and later letters.
 - Merges later upstream updates and ships them as the next Android build.
 - Leaves the iOS project intact. Android work is in the `android:` project settings, the `android/` package, and `Q_OS_ANDROID` sections.
 
