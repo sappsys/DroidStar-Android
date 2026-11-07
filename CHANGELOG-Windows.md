@@ -4,9 +4,12 @@ Windows letter releases of DroidStar. Upstream notes stay with VU3LVO: [vu3lvo.c
 
 Android and Windows share the same product letter for this line (`0.45.07a`, then `b`, and so on). A letter is assigned only when that build is updated on the public repo. A new upstream version starts again at `a`. Shared features added on either platform are brought across to the other before the next letter ships, unless a note here marks them as platform-only (for example Android APK updates, or Windows USB serial dongles).
 
-## Unreleased
+## 0.45.07c
 
-Not on the public repo yet. These notes move under the next letter when that update is published. Local builds already report **0.45.07c**, matching Android.
+Package name `DroidStar-0.45.07c-windows-x64` (folder or zip). Shared letter with Android.
+
+- RX name lookup from radioid.net now shows city and state after the name (then country), e.g. `Anthony • Covington, Louisiana • US`.
+- RX playback uses a PCM jitter buffer before the audio sink (20 ms drain, 600 ms cap), so late network frames are less likely to click or drop out on Windows. Depth is set under RX/TX Controls (0–250 ms, default 200) and stored as `AUDIO_RX_JITTER_MS`. Raising or lowering the slider applies live. At end of an over the RX UI stays active until the buffer has played out.
 
 ## 0.45.07b
 

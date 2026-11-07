@@ -40,11 +40,20 @@ Item {
     default property alias content: contentLoader.sourceComponent
     readonly property Item loadedItem: contentLoader.item
 
-    // Derive content height from the loaded item's implicit/explicit height.
-    readonly property real contentHeight: contentLoader.item
-                                        ? Math.max(contentLoader.item.implicitHeight || 0,
-                                                   contentLoader.item.height || 0)
-                                        : 0
+    // Prefer implicitHeight only. Using item.height feeds back through body.height
+    // (clip + height Behavior) and can permanently crop newly added bottom rows
+    // such as the RX jitter slider under Speaker Pre-Amp.
+    readonly property real contentHeight: {
+        var item = contentLoader.item
+        if (!item)
+            return 0
+        var h = item.implicitHeight
+        if (h > 0)
+            return h
+        if (item.childrenRect && item.childrenRect.height > 0)
+            return item.childrenRect.height
+        return 0
+    }
 
     function toggle() { root.expanded = !root.expanded }
 

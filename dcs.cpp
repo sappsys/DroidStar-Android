@@ -611,14 +611,20 @@ void DCS::process_rx_data()
 		emit update_output_level(m_audio->level());
 	}
 	else if ( (m_modeinfo.stream_state == STREAM_END) || (m_modeinfo.stream_state == STREAM_LOST) ){
+		if (m_audio) {
+			m_audio->stop_playback();
+			if (m_audio->rxPlaybackBusy()) {
+				return;
+			}
+		}
 		m_rxtimer->stop();
-		m_audio->stop_playback();
 		m_rxwatchdog = 0;
 		m_modeinfo.streamid = 0;
 		m_rxcodecq.clear();
 		rxJitterReset();
 		qDebug() << "DCS playback stopped";
 		m_modeinfo.stream_state = STREAM_IDLE;
+		emit update(m_modeinfo);
 		return;
 	}
 }

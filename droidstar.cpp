@@ -1242,6 +1242,7 @@ void DroidStar::save_settings()
     m_settings->setValue("AUDIO_VOICE_ISOLATION", AudioEngine::globalVoiceIsolation());
     m_settings->setValue("AUDIO_RX_CLEAN", AudioEngine::globalRxClean());
     m_settings->setValue("AUDIO_SPK_PREAMP_DB", AudioEngine::globalSpkPreampDb());
+    m_settings->setValue("AUDIO_RX_JITTER_MS", AudioEngine::globalRxJitterMs());
 
     // Force flush to disk so iOS reliably persists immediately.
     m_settings->sync();
@@ -1361,15 +1362,20 @@ void DroidStar::process_settings()
     const bool savedVi = m_settings->value("AUDIO_VOICE_ISOLATION", false).toBool();
     const bool savedRxClean = m_settings->value("AUDIO_RX_CLEAN", false).toBool();
     const float savedPreampDb = std::clamp(m_settings->value("AUDIO_SPK_PREAMP_DB", 6.0f).toFloat(), 0.0f, 24.0f);
+    const int savedRxJitterMs = std::clamp(
+        m_settings->value("AUDIO_RX_JITTER_MS", AudioEngine::kRxJitterDefaultMs).toInt(),
+        0, AudioEngine::kRxJitterMaxTargetMs);
     AudioEngine::loadSavedUserTxSettings(savedNr, savedHd, savedTx, savedVi);
     AudioEngine::setGlobalRxClean(savedRxClean);
     AudioEngine::setGlobalSpkPreampDb(savedPreampDb);
+    AudioEngine::setGlobalRxJitterMs(savedRxJitterMs);
     m_settings->setValue("AUDIO_NR_MODE", savedNr);
     m_settings->setValue("AUDIO_HD_UPSCALE", savedHd);
     m_settings->setValue("AUDIO_TX_ENHANCE", savedTx);
     m_settings->setValue("AUDIO_VOICE_ISOLATION", savedVi);
     m_settings->setValue("AUDIO_RX_CLEAN", savedRxClean);
     m_settings->setValue("AUDIO_SPK_PREAMP_DB", savedPreampDb);
+    m_settings->setValue("AUDIO_RX_JITTER_MS", savedRxJitterMs);
 
     qDebug() << "process_settings loaded:"
              << "CALLSIGN=" << m_callsign

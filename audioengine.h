@@ -31,6 +31,7 @@
 #endif
 #include <QAudioOutput>
 #include <QQueue>
+#include <QTimer>
 #include <QVector>
 #include <array>
 #include <cstdint>
@@ -59,6 +60,10 @@ public:
     static bool globalRxClean();
     static void setGlobalSpkPreampDb(float db);
     static float globalSpkPreampDb();
+    static void setGlobalRxJitterMs(int ms);
+    static int globalRxJitterMs();
+    static constexpr int kRxJitterDefaultMs = 200;
+    static constexpr int kRxJitterMaxTargetMs = 250;
 
     // Saved user TX audio config. External/headset mic is tracked only; enhancements apply on all inputs.
     static void loadSavedUserTxSettings(int nrMode, bool hdOn, bool txOn, bool viOn);
@@ -73,7 +78,11 @@ public:
     void start_capture();
     void stop_capture();
     void start_playback();
-    void stop_playback();
+    // Soft-stop by default: play out the RX jitter queue before tearing down the sink
+    // so the UI can stay "receiving" until the last buffered audio is heard.
+    // Pass immediate=true for disconnect, device change, or a new stream that must cut over.
+    void stop_playback(bool immediate = false);
+    bool rxPlaybackBusy() const;
     void write(int16_t *, size_t);
     void set_output_buffer_size(uint32_t b);
     void set_input_buffer_size(uint32_t b);
@@ -192,6 +201,26 @@ private:
     void initPlaybackSink();
     void initCaptureSource();
     bool matchesSelectedDevice(const QAudioDevice &dev, const QString &selected);
+    void ensurePlaybackRunning();
+    void playPcm8kToDevice(const int16_t *pcm, size_t s);
+    void resetRxJitter();
+    void finish_stop_playback();
+    void applyLiveJitterTarget();
+
+    // RX PCM jitter buffer (8 kHz mono). Target depth is user-set (0–250 ms, default 200);
+    // drains on a 20 ms clock so late network/vocoder frames do not starve WASAPI/CoreAudio.
+    static constexpr int kRxJitterRate = 8000;
+    static constexpr int kRxJitterMaxMs = 600;
+    static constexpr int kRxJitterFrameMs = 20;
+    static constexpr int kRxJitterMaxSamples = (kRxJitterRate * kRxJitterMaxMs) / 1000;     // 4800
+    static constexpr int kRxJitterFrameSamples = (kRxJitterRate * kRxJitterFrameMs) / 1000; // 160
+    int rxJitterTargetSamples() const;
+    QQueue<int16_t> m_rxJitterQ;
+    QTimer *m_rxJitterTimer { nullptr };
+    bool m_rxJitterPrimed { false };
+    bool m_rxJitterDraining { false };
+    int m_rxJitterUnderrunTicks { 0 };
+    int m_rxJitterAppliedTargetSamples { -1 };
 
     float m_audio_out_temp_buf[320];
     float *m_audio_out_temp_buf_p;
@@ -209,6 +238,7 @@ private slots:
     void input_data_received();
     void process_audio(int16_t *pcm, size_t s);
     void handleStateChanged(QAudio::State newState);
+    void drain_rx_jitter();
 };
 
 #endif // AUDIOENGINE_H

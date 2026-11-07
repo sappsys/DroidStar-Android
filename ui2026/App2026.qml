@@ -59,6 +59,7 @@ ApplicationWindow {
         property real micGain: 0.5
         property real spkVolume: 1.0
         property real spkPreampDb: 6.0
+        property int rxJitterMs: 200
         property bool agc: true
         property int dmrSlot: 1
         property int dmrCc: 1
@@ -468,6 +469,7 @@ ApplicationWindow {
         property real micGain: 0.5
         property real spkVolume: 1.0
         property real spkPreampDb: 6.0
+        property int rxJitterMs: 200
         property int outputLevel: 0
         property bool connected: false
         // Legacy-style connection state (0=disconnected, 1=connecting, 2=connected, 5=error)
@@ -1069,6 +1071,10 @@ ApplicationWindow {
             appState.rxClean = !!droidstar.get_rx_clean()
         if (typeof droidstar.get_spk_preamp_db === "function")
             appState.spkPreampDb = Math.max(0, Math.min(24, Number(droidstar.get_spk_preamp_db()) || 0))
+        if (typeof droidstar.get_rx_jitter_ms === "function")
+            appState.rxJitterMs = Math.max(0, Math.min(250, Number(droidstar.get_rx_jitter_ms())))
+        else
+            appState.rxJitterMs = 200
     }
 
     function syncTxClarityFromBackend() {
@@ -1411,6 +1417,12 @@ ApplicationWindow {
         appState.spkPreampDb = clamped
         if (droidstar && typeof droidstar.set_spk_preamp_db === "function")
             droidstar.set_spk_preamp_db(clamped)
+    }
+    function setRxJitterMs(ms) {
+        var clamped = Math.max(0, Math.min(250, Math.round(Number(ms) || 0)))
+        appState.rxJitterMs = clamped
+        if (droidstar && typeof droidstar.set_rx_jitter_ms === "function")
+            droidstar.set_rx_jitter_ms(clamped)
     }
     function setSwtx(on) { appState.swtx = on; if (droidstar) droidstar.set_swtx(on) }
     function setSwrx(on) { appState.swrx = on; if (droidstar) droidstar.set_swrx(on) }
@@ -2579,6 +2591,7 @@ ApplicationWindow {
             if (window.replayPlayerRef) window.replayPlayerRef.volume = Math.max(0, Math.min(1, appState.spkVolume))
         }
         function onSpkPreampDbChanged() { controlSettings.spkPreampDb = appState.spkPreampDb }
+        function onRxJitterMsChanged() { controlSettings.rxJitterMs = appState.rxJitterMs }
         function onAgcChanged() { controlSettings.agc = appState.agc }
         function onDmrSlotChanged() { controlSettings.dmrSlot = appState.dmrSlot }
         function onDmrCcChanged() { controlSettings.dmrCc = appState.dmrCc }

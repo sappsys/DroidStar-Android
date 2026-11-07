@@ -14,7 +14,7 @@ dist/DroidStar-<version>-windows-x64/
   sherpa-onnx-c-api.dll, onnxruntime*.dll   (Neural AI TX clarity)
 ```
 
-Zip that folder, or compile `windows/installer/DroidStar.iss` with Inno Setup for a setup.exe. Users do not need Qt installed.
+That **folder** is the package of record (rsync it, run it, ship it). The build script also writes `dist/DroidStar-<version>-windows-x64.zip` **from that folder** so the zip never drifts. Or compile `windows/installer/DroidStar.iss` with Inno Setup for a setup.exe. Users do not need Qt installed.
 
 A single statically linked EXE is out of scope for v1.
 
@@ -42,7 +42,7 @@ $env:QT_DIR = "C:\Qt\6.6.3\msvc2019_64"
 .\scripts\build-windows.ps1
 ```
 
-Output lands in `dist\DroidStar-<version>-windows-x64\`.
+Output lands in `dist\DroidStar-<version>-windows-x64\` first, then the matching `.zip` is built from that directory.
 
 ## Installer (optional)
 

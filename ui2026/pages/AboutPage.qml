@@ -68,10 +68,17 @@ Page {
         return qsTr("Update")
     }
 
-    Component.onCompleted: {
+    // App2026 keeps visited pages alive in a Loader, so onCompleted only runs on the
+    // first About visit. Recheck whenever this page becomes current again.
+    readonly property bool aboutCurrent: parent && parent.isCurrent === true
+
+    function requestUpdateCheck() {
         if (page.androidBuild && page.droidstarRef)
             page.droidstarRef.check_app_update()
     }
+
+    Component.onCompleted: page.requestUpdateCheck()
+    onAboutCurrentChanged: if (page.aboutCurrent) page.requestUpdateCheck()
 
     Connections {
         target: page.droidstarRef
@@ -219,7 +226,7 @@ Page {
                         wrapMode: Text.WordWrap
                         font.pixelSize: t.fsSmall
                         color: t.textMuted
-                        text: qsTr("Export writes a copy you can keep. The settings in the app stay where they are. Restore is the only button that puts a file back, and it keeps any settings this version already has. The file includes your hotspot passwords.")
+                        text: qsTr("Export writes a copy you can keep (new file, or replace an existing one after confirm). The settings in the app stay where they are. Restore is the only button that puts a file back, and it keeps any settings this version already has. The file includes your hotspot passwords.")
                     }
 
                     Label {

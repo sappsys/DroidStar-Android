@@ -4,9 +4,15 @@ Android letter releases of DroidStar. Upstream notes stay with VU3LVO: [vu3lvo.c
 
 Android and Windows share the same product letter for this line (`0.45.07a`, then `b`, and so on). A letter is assigned only when that build is updated on the public repo. A new upstream version starts again at `a`. Further public builds of the same upstream version use the next letter. The package code is the upstream number times 100, plus the letter index (`a` is 1). Shared features added on either platform are brought across to the other before the next letter ships, unless a note here marks them as platform-only.
 
-## Unreleased
+## 0.45.07c
 
-Not on the public repo yet. These notes move under the next letter when that update is published. Local builds already report **0.45.07c**, matching Windows.
+Package code 450703. Tracks upstream 0.45.07. Shared letter with Windows.
+
+- About rechecks GitHub for an APK update every time you open the page (not only the first visit). Visited pages stay loaded for faster switching, which previously left a stale “None”.
+- Settings export can create a new file or replace an existing one (with a confirm prompt), closer to the Windows save dialog.
+- Android rebuilds invalidate native objects when the version letter changes, so About cannot keep showing the previous letter after a bump.
+- RX name lookup from radioid.net now shows city and state after the name (then country), e.g. `Anthony • Covington, Louisiana • US`.
+- RX playback uses a PCM jitter buffer before the audio sink (20 ms drain, 600 ms cap), so late network frames are less likely to click or drop out. Depth is set under RX/TX Controls (0–250 ms, default 200) and stored as `AUDIO_RX_JITTER_MS`. Raising or lowering the slider applies live. At end of an over the RX UI stays active until the buffer has played out.
 
 ## 0.45.07b
 

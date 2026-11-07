@@ -157,7 +157,7 @@ void DMR::stop_rx_stream()
         m_rxtimer->stop();
     }
     if (m_audio) {
-        m_audio->stop_playback();
+        m_audio->stop_playback(true);
     }
     m_rxcodecq.clear();
     m_rxmodemq.clear();
@@ -2661,8 +2661,14 @@ void DMR::process_rx_data()
         emit update_output_level(m_audio->level());
     }
     else if ( ((m_modeinfo.stream_state == STREAM_END) || (m_modeinfo.stream_state == STREAM_LOST) || (m_modeinfo.stream_state == STREAM_IDLE)) && (m_rxmodemq.size() < 50) ){
+        if (m_audio) {
+            m_audio->stop_playback();
+            if (m_audio->rxPlaybackBusy()) {
+                // Keep STREAM_END and the RX UI until the jitter buffer has played out.
+                return;
+            }
+        }
         m_rxtimer->stop();
-        m_audio->stop_playback();
         m_rxwatchdog = 0;
         m_modeinfo.streamid = 0;
         m_rxcodecq.clear();

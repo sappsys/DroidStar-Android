@@ -55,6 +55,7 @@ std::atomic<bool> s_globalTxEnhance { false };
 std::atomic<bool> s_globalVoiceIsolation { false };
 std::atomic<bool> s_globalRxClean { false };
 std::atomic<float> s_globalSpkPreampDb { 6.0f };
+std::atomic<int> s_globalRxJitterMs { 200 };
 std::atomic<void (*)()> s_stateChangeCallback { nullptr };
 
 // Track headset / BT / USB mics for logging only. TX enhancements (NR, HD Voice,
@@ -94,6 +95,9 @@ void ensureEnhancerSettingsLoaded()
     const bool viOn = settings.value(QStringLiteral("AUDIO_VOICE_ISOLATION"), false).toBool();
     const bool rxCleanOn = settings.value(QStringLiteral("AUDIO_RX_CLEAN"), false).toBool();
     const float preampDb = std::clamp(settings.value(QStringLiteral("AUDIO_SPK_PREAMP_DB"), 6.0f).toFloat(), 0.0f, 24.0f);
+    const int rxJitterMs = std::clamp(
+        settings.value(QStringLiteral("AUDIO_RX_JITTER_MS"), AudioEngine::kRxJitterDefaultMs).toInt(),
+        0, AudioEngine::kRxJitterMaxTargetMs);
 
     settings.setValue(QStringLiteral("AUDIO_NR_MODE"), nrMode);
     settings.setValue(QStringLiteral("AUDIO_HD_UPSCALE"), hdOn);
@@ -101,6 +105,7 @@ void ensureEnhancerSettingsLoaded()
     settings.setValue(QStringLiteral("AUDIO_VOICE_ISOLATION"), viOn);
     settings.setValue(QStringLiteral("AUDIO_RX_CLEAN"), rxCleanOn);
     settings.setValue(QStringLiteral("AUDIO_SPK_PREAMP_DB"), preampDb);
+    settings.setValue(QStringLiteral("AUDIO_RX_JITTER_MS"), rxJitterMs);
 
     s_savedUserNoiseMode.store(nrMode, std::memory_order_relaxed);
     s_savedUserHdUpscale.store(hdOn, std::memory_order_relaxed);
@@ -108,6 +113,7 @@ void ensureEnhancerSettingsLoaded()
     s_globalVoiceIsolation.store(viOn, std::memory_order_relaxed);
     s_globalRxClean.store(rxCleanOn, std::memory_order_relaxed);
     s_globalSpkPreampDb.store(preampDb, std::memory_order_relaxed);
+    s_globalRxJitterMs.store(rxJitterMs, std::memory_order_relaxed);
 
     s_globalNoiseMode.store(nrMode, std::memory_order_relaxed);
     s_globalHdUpscale.store(hdOn, std::memory_order_relaxed);
@@ -258,6 +264,25 @@ float AudioEngine::globalSpkPreampDb()
     return s_globalSpkPreampDb.load(std::memory_order_relaxed);
 }
 
+void AudioEngine::setGlobalRxJitterMs(int ms)
+{
+    ensureEnhancerSettingsLoaded();
+    const int clamped = std::clamp(ms, 0, kRxJitterMaxTargetMs);
+    s_globalRxJitterMs.store(clamped, std::memory_order_relaxed);
+}
+
+int AudioEngine::globalRxJitterMs()
+{
+    ensureEnhancerSettingsLoaded();
+    return s_globalRxJitterMs.load(std::memory_order_relaxed);
+}
+
+int AudioEngine::rxJitterTargetSamples() const
+{
+    const int ms = std::clamp(s_globalRxJitterMs.load(std::memory_order_relaxed), 0, kRxJitterMaxTargetMs);
+    return (kRxJitterRate * ms) / 1000;
+}
+
 AudioEngine::AudioEngine(QString in, QString out) :
     m_outputdevice(out),
     m_inputdevice(in),
@@ -278,6 +303,11 @@ AudioEngine::AudioEngine(QString in, QString out) :
     memset(m_audio_out_temp_buf, 0, sizeof(m_audio_out_temp_buf));
     memset(m_aout_max_buf, 0, sizeof(m_aout_max_buf));
     m_aout_max_buf_p = m_aout_max_buf;
+
+    m_rxJitterTimer = new QTimer(this);
+    m_rxJitterTimer->setTimerType(Qt::PreciseTimer);
+    m_rxJitterTimer->setInterval(kRxJitterFrameMs);
+    connect(m_rxJitterTimer, &QTimer::timeout, this, &AudioEngine::drain_rx_jitter);
 }
 
 static inline int16_t clampToInt16(float x)
@@ -409,7 +439,7 @@ AudioEngine::~AudioEngine()
         m_out->disconnect(this);
     }
     stop_capture();
-    stop_playback();
+    stop_playback(true);
     if (m_in) {
         delete m_in;
         m_in = nullptr;
@@ -508,7 +538,7 @@ void AudioEngine::initPlaybackSink()
     if (m_out != nullptr) {
         m_out->disconnect(this);
         m_reinitializingSink = true;
-        stop_playback();
+        stop_playback(true);
         m_reinitializingSink = false;
         delete m_out;
         m_out = nullptr;
@@ -885,8 +915,26 @@ void AudioEngine::start_playback()
     }
 }
 
-void AudioEngine::stop_playback()
+void AudioEngine::resetRxJitter()
 {
+    if (m_rxJitterTimer) {
+        m_rxJitterTimer->stop();
+    }
+    m_rxJitterQ.clear();
+    m_rxJitterPrimed = false;
+    m_rxJitterDraining = false;
+    m_rxJitterUnderrunTicks = 0;
+    m_rxJitterAppliedTargetSamples = -1;
+}
+
+bool AudioEngine::rxPlaybackBusy() const
+{
+    return m_rxJitterDraining || !m_rxJitterQ.isEmpty();
+}
+
+void AudioEngine::finish_stop_playback()
+{
+    resetRxJitter();
     if (!m_reinitializingSink) {
         if (TranscriptionEngine *te = TranscriptionEngine::instance()) {
             te->markEndOfTransmission();
@@ -905,6 +953,52 @@ void AudioEngine::stop_playback()
             m_out->reset();
         }
         qDebug() << "AudioOut state Stop Playback";
+    }
+}
+
+void AudioEngine::stop_playback(bool immediate)
+{
+    if (!immediate && !m_rxJitterQ.isEmpty()) {
+        // Keep the sink fed from the remaining PCM so the tail of the over is heard;
+        // Mode keeps STREAM_END / UI "receiving" until rxPlaybackBusy() goes false.
+        m_rxJitterDraining = true;
+        m_rxJitterPrimed = true;
+        m_rxJitterUnderrunTicks = 0;
+        if (m_rxJitterTimer && !m_rxJitterTimer->isActive()) {
+            m_rxJitterTimer->start();
+        }
+        return;
+    }
+    finish_stop_playback();
+}
+
+void AudioEngine::applyLiveJitterTarget()
+{
+    if (m_rxJitterDraining) {
+        return;
+    }
+    const int target = rxJitterTargetSamples();
+    if (m_rxJitterAppliedTargetSamples == target) {
+        return;
+    }
+    m_rxJitterAppliedTargetSamples = target;
+
+    if (!m_rxJitterPrimed && m_rxJitterQ.isEmpty()) {
+        return;
+    }
+
+    if (m_rxJitterQ.size() > target) {
+        // Lowered depth: drop oldest samples so latency shrinks immediately.
+        while (m_rxJitterQ.size() > target) {
+            m_rxJitterQ.dequeue();
+        }
+        if (target <= 0 && !m_rxJitterQ.isEmpty()) {
+            m_rxJitterPrimed = true;
+        }
+    } else if (m_rxJitterPrimed && target > 0 && m_rxJitterQ.size() < target) {
+        // Raised depth: pause drain until the new target is buffered.
+        m_rxJitterPrimed = false;
+        m_rxJitterUnderrunTicks = 0;
     }
 }
 
@@ -1010,6 +1104,24 @@ void AudioEngine::input_data_received()
     }
 }
 
+void AudioEngine::ensurePlaybackRunning()
+{
+#ifdef Q_OS_IOS
+    const uint32_t currentGen = getAudioRouteGeneration();
+    if (m_out == nullptr || currentGen != m_lastPlayRouteGen || m_outdev == nullptr ||
+        m_out->state() == QAudio::StoppedState || m_out->state() == QAudio::SuspendedState ||
+        m_out->error() == QAudio::FatalError) {
+        start_playback();
+    }
+#else
+    if (m_out == nullptr || m_outdev == nullptr ||
+        m_out->state() == QAudio::StoppedState || m_out->state() == QAudio::SuspendedState ||
+        m_out->error() == QAudio::FatalError) {
+        start_playback();
+    }
+#endif
+}
+
 void AudioEngine::write(int16_t *pcm, size_t s)
 {
     m_maxlevel = 0;
@@ -1027,21 +1139,91 @@ void AudioEngine::write(int16_t *pcm, size_t s)
         }
     }
 
-#ifdef Q_OS_IOS
-    const uint32_t currentGen = getAudioRouteGeneration();
-    if (m_out == nullptr || currentGen != m_lastPlayRouteGen || m_outdev == nullptr ||
-        m_out->state() == QAudio::StoppedState || m_out->state() == QAudio::SuspendedState ||
-        m_out->error() == QAudio::FatalError) {
-        start_playback();
+    // Enqueue only; open the sink after the target depth is reached so the
+    // hardware prefill is not exhausted while we are still buffering.
+    // End-of-over drain rejects new PCM so a late frame cannot reopen the queue.
+    if (m_rxJitterDraining) {
+        return;
     }
-#else
-    if (m_out == nullptr || m_outdev == nullptr ||
-        m_out->state() == QAudio::StoppedState || m_out->state() == QAudio::SuspendedState ||
-        m_out->error() == QAudio::FatalError) {
-        start_playback();
+    for (size_t i = 0; i < s; ++i) {
+        m_rxJitterQ.enqueue(pcm[i]);
     }
-#endif
+    while (m_rxJitterQ.size() > kRxJitterMaxSamples) {
+        m_rxJitterQ.dequeue();
+    }
+    applyLiveJitterTarget();
+
+    if (m_rxJitterTimer && !m_rxJitterTimer->isActive()) {
+        m_rxJitterTimer->start();
+    }
+}
+
+void AudioEngine::drain_rx_jitter()
+{
+    applyLiveJitterTarget();
+
+    if (m_rxJitterDraining && m_rxJitterQ.isEmpty()) {
+        finish_stop_playback();
+        return;
+    }
+
+    if (!m_rxJitterPrimed) {
+        const int targetSamples = rxJitterTargetSamples();
+        // Target 0: start as soon as any PCM is queued (lowest delay).
+        // Target > 0: wait until the chosen depth is reached.
+        if (targetSamples <= 0) {
+            if (m_rxJitterQ.isEmpty()) {
+                return;
+            }
+        } else if (m_rxJitterQ.size() < targetSamples) {
+            return;
+        }
+        m_rxJitterPrimed = true;
+        m_rxJitterUnderrunTicks = 0;
+        qDebug() << "RX jitter primed at" << m_rxJitterQ.size() << "samples (~"
+                 << ((m_rxJitterQ.size() * 1000) / kRxJitterRate) << "ms), target="
+                 << globalRxJitterMs() << "ms";
+    }
+
+    ensurePlaybackRunning();
     if (m_outdev == nullptr) {
+        return;
+    }
+
+    int16_t frame[kRxJitterFrameSamples];
+    size_t got = 0;
+    while (got < static_cast<size_t>(kRxJitterFrameSamples) && !m_rxJitterQ.isEmpty()) {
+        frame[got++] = m_rxJitterQ.dequeue();
+    }
+    const bool underrun = (got < static_cast<size_t>(kRxJitterFrameSamples));
+    while (got < static_cast<size_t>(kRxJitterFrameSamples)) {
+        frame[got++] = 0;
+    }
+
+    if (m_rxJitterDraining) {
+        playPcm8kToDevice(frame, static_cast<size_t>(kRxJitterFrameSamples));
+        if (m_rxJitterQ.isEmpty()) {
+            finish_stop_playback();
+        }
+        return;
+    }
+
+    if (underrun) {
+        if (++m_rxJitterUnderrunTicks >= 25) {
+            // ~500 ms of continuous starvation: re-prime instead of streaming zeros.
+            m_rxJitterPrimed = false;
+            m_rxJitterUnderrunTicks = 0;
+        }
+    } else {
+        m_rxJitterUnderrunTicks = 0;
+    }
+
+    playPcm8kToDevice(frame, static_cast<size_t>(kRxJitterFrameSamples));
+}
+
+void AudioEngine::playPcm8kToDevice(const int16_t *pcm, size_t s)
+{
+    if (pcm == nullptr || s == 0 || m_outdev == nullptr) {
         return;
     }
 
@@ -1155,7 +1337,7 @@ void AudioEngine::write(int16_t *pcm, size_t s)
     }
 
     if (attemptedBytes > 0 && bytesWritten < attemptedBytes) {
-        qDebug() << "AudioEngine::write underrun bytesAttempted=" << attemptedBytes
+        qDebug() << "AudioEngine::playPcm8kToDevice underrun bytesAttempted=" << attemptedBytes
                  << "bytesWritten=" << bytesWritten
                  << "bytesFree=" << (m_out ? m_out->bytesFree() : 0)
                  << "bufferSize=" << (m_out ? m_out->bufferSize() : 0);
@@ -1167,7 +1349,7 @@ void AudioEngine::write(int16_t *pcm, size_t s)
                 const qint64 nowMs = captureMonotonicMs();
                 const qint64 holdMs = std::min<qint64>(10000, 1000LL << std::min(m_sinkRebuildCount, 4));
                 if (m_sinkRebuildCount == 0 || (nowMs - m_lastSinkRebuildMs) >= holdMs) {
-                    qWarning() << "AudioEngine::write detected stalled QAudioSink; reinitializing playback sink";
+                    qWarning() << "AudioEngine::playPcm8kToDevice detected stalled QAudioSink; reinitializing playback sink";
                     m_lastSinkRebuildMs = nowMs;
                     ++m_sinkRebuildCount;
 #ifdef Q_OS_IOS
@@ -1426,7 +1608,7 @@ void AudioEngine::setOutputDevice(const QString &deviceName) {
     if (m_out != nullptr) {
         const bool wasActive = (m_outdev != nullptr && m_out->state() != QAudio::StoppedState);
         m_reinitializingSink = true;
-        stop_playback();
+        stop_playback(true);
         m_reinitializingSink = false;
         initPlaybackSink();
         if (wasActive) {

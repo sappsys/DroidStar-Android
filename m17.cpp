@@ -279,7 +279,7 @@ void M17::process_udp()
 		if( (m_modeinfo.streamid != 0) && (streamid != m_modeinfo.streamid) ){
 			qDebug() << "New streamid received before timeout";
 			m_modeinfo.streamid = 0;
-			m_audio->stop_playback();
+			m_audio->stop_playback(true);
 		}
 		if( !m_tx && (m_modeinfo.streamid == 0) ){
 			uint8_t cs[10];
@@ -1021,8 +1021,13 @@ void M17::process_rx_data()
 		emit update_output_level(m_audio->level());
 	}
 	else if ( ((m_modeinfo.stream_state == STREAM_END) || (m_modeinfo.stream_state == STREAM_LOST)) && (m_rxmodemq.size() < 50) ){
+		if (m_audio) {
+			m_audio->stop_playback();
+			if (m_audio->rxPlaybackBusy()) {
+				return;
+			}
+		}
 		m_rxtimer->stop();
-		m_audio->stop_playback();
 		m_rxwatchdog = 0;
 		m_modeinfo.streamid = 0;
 		m_rxcodecq.clear();
@@ -1031,6 +1036,7 @@ void M17::process_rx_data()
 		m_rxmodemq.clear();
 		qDebug() << "M17 playback stopped";
 		m_modeinfo.stream_state = STREAM_IDLE;
+		emit update(m_modeinfo);
 		return;
 	}
 }

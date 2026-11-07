@@ -40,6 +40,18 @@ build=$root/build/android
 mkdir -p "$build"
 cd "$build"
 "$QT_ANDROID/bin/qmake" "$root/DroidStar.pro" -spec android-clang CONFIG+=release
+
+# qmake puts APP_VERSION into DEFINES, but make will not rebuild .o files when only
+# those defines change. Invalidate objects when the Android letter version moves so
+# About / get_software_build() cannot keep showing the previous letter.
+ver=$(sed -n 's/^android:ANDROID_VERSION_NAME = //p' "$root/DroidStar.pro" | head -1 | tr -d '[:space:]')
+stamp=$build/.app-version-stamp
+if [ ! -f "$stamp" ] || [ "$(cat "$stamp")" != "$ver" ]; then
+    echo "Version stamp $ver: rebuilding objects so APP_VERSION matches."
+    find "$build" -maxdepth 1 \( -name '*.o' -o -name 'moc_*.cpp' -o -name 'libDroidStar_arm64-v8a.so' \) -delete
+    printf '%s\n' "$ver" > "$stamp"
+fi
+
 make -j"$(nproc)"
 
 # Gradle can package a stale copy of libDroidStar. Force the library that was

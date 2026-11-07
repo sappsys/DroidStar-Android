@@ -56,7 +56,8 @@ public:
         if (it != m_cache.constEnd()) {
             const CachedUser cached = it.value();
             setFetchedFirstName(cached.name);
-            setFetchedCountry(cached.country);
+            // cached.country already includes "City, State • Country" when known
+            setFetchedCountryDisplay(cached.country);
             emit userLookupReady(data1, cached.callsign, cached.name, m_fetchedCountry);
             return;
         }
@@ -83,17 +84,48 @@ public:
         emit fetchedFirstNameChanged(m_fetchedFirstName);
     }
 
+    static QString shortenCountry(QString country)
+    {
+        if (country == QLatin1String("United States"))
+            return QStringLiteral("US");
+        if (country == QLatin1String("United Kingdom"))
+            return QStringLiteral("UK");
+        return country;
+    }
+
+    static QString formatCityState(const QString &city, const QString &state)
+    {
+        const QString c = city.trimmed();
+        const QString s = state.trimmed();
+        if (!c.isEmpty() && !s.isEmpty())
+            return c + QStringLiteral(", ") + s;
+        if (!c.isEmpty())
+            return c;
+        return s;
+    }
+
+    // Place string shown after the name: "City, State • Country" (parts omitted if empty).
+    static QString formatPlaceDisplay(const QString &city, const QString &state, const QString &country)
+    {
+        const QString loc = formatCityState(city, state);
+        const QString c = shortenCountry(country.trimmed());
+        if (!loc.isEmpty() && !c.isEmpty())
+            return loc + QStringLiteral(" • ") + c;
+        if (!loc.isEmpty())
+            return loc;
+        return c;
+    }
+
     void setFetchedCountry(const QString &country)
     {
-        QString modifiedCountry = country;
+        setFetchedCountryDisplay(shortenCountry(country));
+    }
 
-        if (modifiedCountry == "United States") {
-            modifiedCountry = "US";
-        } else if (modifiedCountry == "United Kingdom") {
-            modifiedCountry = "UK";
-        }
-
-        m_fetchedCountry = modifiedCountry;
+    void setFetchedCountryDisplay(const QString &display)
+    {
+        if (m_fetchedCountry == display)
+            return;
+        m_fetchedCountry = display;
         emit fetchedCountryChanged(m_fetchedCountry);
     }
 
@@ -157,7 +189,12 @@ private slots:
             name = first.value("fname").toString();
         }
 
-        QString country = first.value("country").toString();
+        const QString country = first.value("country").toString();
+        const QString city = first.value("city").toString();
+        // radioid.net uses "state"; some dumps use "province"
+        QString state = first.value("state").toString();
+        if (state.trimmed().isEmpty())
+            state = first.value("province").toString();
         QString callsign = first.value("callsign").toString();
         unsigned int dmrId = first.value("radio_id").toInt();
         if (!dmrId) {
@@ -169,16 +206,17 @@ private slots:
             dmrId = m_lastRequestedId;
         }
 
+        const QString place = formatPlaceDisplay(city, state, country);
         qDebug() << "Parsed name:" << name;
-        qDebug() << "Parsed country:" << country;
+        qDebug() << "Parsed place:" << place;
 
         setFetchedFirstName(name);
-        setFetchedCountry(country);
+        setFetchedCountryDisplay(place);
         if (dmrId > 0) {
             if (m_cache.size() >= 1024) {
                 m_cache.clear();
             }
-            m_cache.insert(dmrId, CachedUser{callsign, name, country});
+            m_cache.insert(dmrId, CachedUser{callsign, name, place});
         }
         emit userLookupReady(dmrId, callsign, name, m_fetchedCountry);
 

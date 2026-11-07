@@ -78,4 +78,10 @@ foreach ($dll in @(
     Copy-Item $src (Join-Path $dist $dll) -Force
 }
 
+# Zip is always derived from the folder (folder is what we rsync / ship as the live package).
+$zip = Join-Path $root "dist\DroidStar-$ver-windows-x64.zip"
+if (Test-Path $zip) { Remove-Item -Force $zip }
+Compress-Archive -Path $dist -DestinationPath $zip -Force
+
 Write-Host "Windows package: $dist"
+Write-Host "Windows zip:     $zip"

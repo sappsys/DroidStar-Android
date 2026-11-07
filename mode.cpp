@@ -105,7 +105,7 @@ Mode::~Mode()
     }
     if (m_audio) {
         m_audio->stop_capture();
-        m_audio->stop_playback();
+        m_audio->stop_playback(true);
         delete m_audio;
         m_audio = nullptr;
     }
@@ -452,7 +452,7 @@ void Mode::deleteLater()
     }
     if (m_audio) {
         m_audio->stop_capture();
-        m_audio->stop_playback();
+        m_audio->stop_playback(true);
         delete m_audio;
         m_audio = nullptr;
     }

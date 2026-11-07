@@ -1478,8 +1478,13 @@ void YSF::process_rx_data()
 	}
 
 	else if ( ((m_modeinfo.stream_state == STREAM_END) || (m_modeinfo.stream_state == STREAM_LOST)) && (m_rxmodemq.size() < 100) ){
+		if (m_audio) {
+			m_audio->stop_playback();
+			if (m_audio->rxPlaybackBusy()) {
+				return;
+			}
+		}
 		m_rxtimer->stop();
-		m_audio->stop_playback();
 		m_rxwatchdog = 0;
 		m_modeinfo.streamid = 0;
 		m_rxcodecq.clear();
@@ -1489,6 +1494,7 @@ void YSF::process_rx_data()
 		//m_ambedev->clear_queue();
 		qDebug() << "YSF playback stopped";
 		m_modeinfo.stream_state = STREAM_IDLE;
+		emit update(m_modeinfo);
 		return;
 	}
 }

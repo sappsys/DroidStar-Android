@@ -1,6 +1,6 @@
 # DroidStar Android
 
-Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public release is **0.45.07b** (Android APK and Windows x64 zip). Local builds report **0.45.07c**.
+Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public release is **0.45.07c** (Android APK and Windows x64 zip).
 
 DroidStar is a free, GPL digital ham radio app: DMR on BrandMeister, YSF, M17, P25, NXDN, D-STAR, and AllStar. You need an amateur licence. The phone talks to the network the way a hotspot would.
 
@@ -16,7 +16,7 @@ The iOS app, TestFlight invites, and that changelog stay with VU3LVO. Questions 
 
 ## What this line does
 
-- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of this letter line (public **0.45.07b**).
+- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of this letter line (public **0.45.07c**).
 - Merges later upstream updates and ships them as the next Android build.
 - Leaves the iOS project intact. Android work is in the `android/` package and `Q_OS_ANDROID` sections. Windows packaging lives in `windows/` with `Q_OS_WIN` / desktop gates — same product tree, not a fork.
 
@@ -40,7 +40,7 @@ Windows uses the same shared radio code and `ui2026` UI, plus Qt SerialPort for 
 powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
 ```
 
-That writes a self-contained folder under `dist/DroidStar-<version>-windows-x64/` (`windeployqt`; no Qt install needed on the user’s PC). Optional Inno Setup script: `windows/installer/DroidStar.iss`.
+That writes a self-contained folder under `dist/DroidStar-<version>-windows-x64/` (`windeployqt`; no Qt install needed on the user’s PC), then builds the `.zip` from that folder so both stay in line. Optional Inno Setup script: `windows/installer/DroidStar.iss`.
 
 What 0.45.07 added upstream — QSO Replay, hardware PTT, Simple mode, the BrandMeister and TGIF password check, and the rest of that release — is described in VU3LVO's [changelog](https://www.vu3lvo.com/droidstar/changelog). Each Android letter is recorded in [CHANGELOG-Android.md](CHANGELOG-Android.md); each Windows letter in [CHANGELOG-Windows.md](CHANGELOG-Windows.md).
 

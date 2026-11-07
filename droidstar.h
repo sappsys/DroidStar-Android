@@ -295,6 +295,14 @@ public slots:
         }
     }
     qreal get_spk_preamp_db() { return static_cast<qreal>(AudioEngine::globalSpkPreampDb()); }
+    void set_rx_jitter_ms(int ms)
+    {
+        AudioEngine::setGlobalRxJitterMs(ms);
+        if (m_settings && m_settings_processed) {
+            m_settings->setValue("AUDIO_RX_JITTER_MS", AudioEngine::globalRxJitterMs());
+        }
+    }
+    int get_rx_jitter_ms() { return AudioEngine::globalRxJitterMs(); }
     void set_mmdvm_direct(bool mmdvm) { m_mdirect = mmdvm; process_mode_change(m_protocol); }
     void set_iaxport(const QString &port){ m_iaxport = port.simplified().toUInt(); save_settings(); }
     void set_dst(QString dst){emit dst_changed(dst);}

@@ -591,13 +591,25 @@ Page {
                         property bool heldActive: false
                         property string heldDescription: ""
                         property bool showPreampInfo: false
+                        property bool showJitterInfo: false
 
                         function togglePreampInfo() {
                             txCol.showPreampInfo = !txCol.showPreampInfo
                             if (txCol.showPreampInfo) {
+                                txCol.showJitterInfo = false
                                 preampInfoDismissTimer.restart()
                             } else {
                                 preampInfoDismissTimer.stop()
+                            }
+                        }
+
+                        function toggleJitterInfo() {
+                            txCol.showJitterInfo = !txCol.showJitterInfo
+                            if (txCol.showJitterInfo) {
+                                txCol.showPreampInfo = false
+                                jitterInfoDismissTimer.restart()
+                            } else {
+                                jitterInfoDismissTimer.stop()
                             }
                         }
 
@@ -606,6 +618,13 @@ Page {
                             interval: 8000
                             repeat: false
                             onTriggered: txCol.showPreampInfo = false
+                        }
+
+                        Timer {
+                            id: jitterInfoDismissTimer
+                            interval: 8000
+                            repeat: false
+                            onTriggered: txCol.showJitterInfo = false
                         }
 
                         function showHoldGuide(titleText, badgeText, isActive, descText) {
@@ -726,7 +745,9 @@ Page {
                                     id: preampIconMouse
                                     anchors.fill: parent
                                     anchors.margins: -8
+                                    z: 1
                                     cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
                                     onClicked: txCol.togglePreampInfo()
                                 }
                             }
@@ -764,7 +785,9 @@ Page {
                                     id: preampValueMouse
                                     anchors.fill: parent
                                     anchors.margins: -6
+                                    z: 1
                                     cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
                                     onClicked: txCol.togglePreampInfo()
                                 }
                             }
@@ -846,6 +869,162 @@ Page {
                                     font.pixelSize: 10
                                     Accessible.name: qsTr("Dismiss description")
                                     onClicked: txCol.showPreampInfo = false
+                                }
+                            }
+                        }
+
+                        // RX delay buffer — identical to Speaker Pre-Amp: icon | slider | value; tap icon/value for help
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            Item {
+                                Layout.preferredWidth: 18
+                                Layout.preferredHeight: 36
+                                Accessible.role: Accessible.Button
+                                Accessible.name: qsTr("Receive delay buffer info")
+                                Accessible.onPressAction: txCol.toggleJitterInfo()
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "\uf017"
+                                    font.family: "FontAwesome"
+                                    font.pixelSize: 15
+                                    color: (jitterSlider.value > 0) ? t.accent : t.textMuted
+                                    scale: jitterIconMouse.pressed ? 0.9 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: t.durFast } }
+                                }
+
+                                MouseArea {
+                                    id: jitterIconMouse
+                                    anchors.fill: parent
+                                    anchors.margins: -8
+                                    z: 1
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
+                                    onClicked: txCol.toggleJitterInfo()
+                                }
+                            }
+                            Slider {
+                                id: jitterSlider
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                from: 0
+                                to: 250
+                                stepSize: 10
+                                value: appState ? appState.rxJitterMs : 200
+                                Accessible.name: qsTr("Receive delay buffer in milliseconds")
+                                onMoved: if (page.app) page.app.setRxJitterMs(value)
+                                onValueChanged: if (pressed && page.app) page.app.setRxJitterMs(value)
+                            }
+                            Item {
+                                Layout.preferredWidth: 46
+                                Layout.preferredHeight: 36
+                                Accessible.role: Accessible.Button
+                                Accessible.name: qsTr("Receive delay buffer value and info")
+                                Accessible.onPressAction: txCol.toggleJitterInfo()
+
+                                Label {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: Math.round(jitterSlider.value) + " ms"
+                                    font.pixelSize: t.fsSmall
+                                    font.bold: jitterSlider.value > 0
+                                    color: (jitterSlider.value > 0) ? t.accent : t.textMuted
+                                    horizontalAlignment: Text.AlignRight
+                                    opacity: jitterValueMouse.pressed ? 0.7 : 1.0
+                                }
+
+                                MouseArea {
+                                    id: jitterValueMouse
+                                    anchors.fill: parent
+                                    anchors.margins: -6
+                                    z: 1
+                                    cursorShape: Qt.PointingHandCursor
+                                    preventStealing: true
+                                    onClicked: txCol.toggleJitterInfo()
+                                }
+                            }
+                        }
+
+                        // Help card only exists while open (same idea as Pre-Amp card)
+                        Loader {
+                            Layout.fillWidth: true
+                            active: txCol.showJitterInfo
+                            visible: active
+                            sourceComponent: Rectangle {
+                                implicitHeight: jitterGuideRow.implicitHeight + 16
+                                radius: 10
+                                color: t.tint(t.accent, 0.12)
+                                border.color: t.tint(t.accent, 0.5)
+                                border.width: 1
+
+                                RowLayout {
+                                    id: jitterGuideRow
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 8
+                                    spacing: 8
+
+                                    Label {
+                                        text: "\uf017"
+                                        font.family: "FontAwesome"
+                                        font.pixelSize: 14
+                                        color: t.accent
+                                        Layout.alignment: Qt.AlignTop
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
+                                        spacing: 3
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 6
+                                            Label {
+                                                text: qsTr("Receive Delay Buffer")
+                                                font.pixelSize: t.fsSmall
+                                                font.bold: true
+                                                color: t.text
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                            Rectangle {
+                                                radius: 4
+                                                implicitHeight: 16
+                                                implicitWidth: jitterStateLbl.implicitWidth + 8
+                                                color: (Math.round(jitterSlider.value) > 0) ? t.tint(t.accent, 0.2) : t.surface3
+                                                Label {
+                                                    id: jitterStateLbl
+                                                    anchors.centerIn: parent
+                                                    text: Math.round(jitterSlider.value) + " ms"
+                                                    font.pixelSize: t.fsCaption - 1
+                                                    font.bold: true
+                                                    color: (Math.round(jitterSlider.value) > 0) ? t.accent : t.textMuted
+                                                }
+                                            }
+                                        }
+
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: qsTr("Holds received audio briefly before playing so late network packets are less likely to click or drop out. Changes apply live. At the end of an over, receive stays active until the buffer has played out. 0 ms is lowest delay; higher values add stability. Default is 200 ms (max 250 ms).")
+                                            font.pixelSize: t.fsCaption
+                                            color: t.text
+                                            wrapMode: Text.WordWrap
+                                        }
+                                    }
+
+                                    ToolButton {
+                                        implicitWidth: 22
+                                        implicitHeight: 22
+                                        padding: 0
+                                        text: "\uf00d"
+                                        font.family: "FontAwesome"
+                                        font.pixelSize: 10
+                                        Accessible.name: qsTr("Dismiss description")
+                                        onClicked: txCol.showJitterInfo = false
+                                    }
                                 }
                             }
                         }
