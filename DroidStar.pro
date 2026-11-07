@@ -97,6 +97,8 @@ SOURCES += \
         ReplayWavWriter.cpp \
         TranscriptionEngine.cpp \
         NetReminderManager.cpp \
+        appupdate.cpp \
+        configbackup.cpp \
         third_party/whisper/whisper.cpp \
         third_party/whisper/ggml.c \
         third_party/whisper/ggml-alloc.c \
@@ -151,6 +153,9 @@ resources.files = main.qml fontawesome-webfont.ttf \
                   images/droidstar.png \
                   images/droidstar_logo.png \
                   images/droidstar_logo_white.png \
+                  images/droidstar_android.png \
+                  images/droidstar_android_logo.png \
+                  images/droidstar_android_logo_white.png \
                   ui2026/App2026.qml \
                   ui2026/theme/Tokens.qml \
                   ui2026/components/AppCard.qml \
@@ -323,9 +328,9 @@ SOURCES += \
 android:HEADERS += androidserialport.h
 macx:HEADERS += micpermission.h
 !ios:HEADERS += serialambe.h serialmodem.h
-# Android releases of an iOS version get a letter suffix: 0.45.07a, then b, through z.
-# versionCode is 450700 plus the letter index (a = 1) so each letter upgrades in place,
-# and 0.45.08 can start at 450800.
+# Android letter of an upstream version: 0.45.07a, then b through z. A new upstream
+# version starts again at a. Package code is the upstream number times 100, plus the
+# letter index (a is 1): 0.45.07a is 450701, 0.45.08a is 450801.
 android:ANDROID_VERSION_NAME = 0.45.07a
 android:ANDROID_VERSION_CODE = 450701
 android:DEFINES += APP_VERSION=\\\"0.45.07a\\\"

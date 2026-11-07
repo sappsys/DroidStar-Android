@@ -199,14 +199,33 @@ ApplicationWindow {
         window.updateHoselineStreamLifecycle()
     }
 
+    // Menu taps close the drawer first, then change page on the next turn so
+    // Scan/Settings are not laid out inside the same click that freezes the display.
+    property string pendingNav: ""
+
+    function requestNavigate(key) {
+        if (pageKeys.indexOf(key) < 0 || key === "simple") return
+        if (window.currentPageItem && typeof window.currentPageItem.pauseForNavigation === "function")
+            window.currentPageItem.pauseForNavigation()
+        if (!navDocked && navDrawer.opened) {
+            window.pendingNav = key
+            navDrawer.close()
+            return
+        }
+        window.pendingNav = ""
+        Qt.callLater(function() { window.navigate(key) })
+    }
+
     function navigate(key) {
         if (pageKeys.indexOf(key) < 0 || key === "simple") return
+        window.pendingNav = ""
         if (window.smsManagerRef && typeof window.smsManagerRef.setChatKeyboardMode === "function") {
             window.smsManagerRef.setChatKeyboardMode(key === "messages")
         }
         _markVisited(key)
         window.currentPage = key
-        if (!navDocked) navDrawer.close()
+        if (!navDocked && navDrawer.opened)
+            navDrawer.close()
         window.updateHoselineStreamLifecycle()
     }
 
@@ -2645,6 +2664,34 @@ ApplicationWindow {
     // ─────────────────────────────────────────────────────────
     // NAVIGATION DRAWER (modal on phones, docked sidebar on wide screens)
     // ─────────────────────────────────────────────────────────
+    readonly property var navItems: [
+        { key: "main",     title: qsTr("Main"),     icon: "\uf015" },
+        { key: "scan",     title: qsTr("Scan"),     icon: "\uf002" },
+        { key: "messages", title: qsTr("Messages"), icon: "\uf0e0" },
+        { key: "settings", title: qsTr("Settings"), icon: "\uf013" },
+        { key: "qso",      title: qsTr("QSO"),      icon: "\uf2b9" },
+        { key: "nets",     title: qsTr("Nets"),     icon: "\uf0f3" },
+        { key: "log",      title: qsTr("Log"),      icon: "\uf15c" },
+        { key: "hosts",    title: qsTr("Hosts"),    icon: "\uf233" },
+        { key: "about",    title: qsTr("About"),    icon: "\uf05a" }
+    ]
+
+    function navBadge(key) {
+        if (key === "scan") {
+            return (appState.hoselineActiveFavCount > 0)
+                   ? (appState.hoselineActiveFavCount + " " + qsTr("LIVE"))
+                   : qsTr("LIVE")
+        }
+        if (key === "messages") {
+            return (window.smsManagerRef && window.smsManagerRef.unreadCount > 0)
+                   ? (window.smsManagerRef.unreadCount + " " + qsTr("NEW"))
+                   : qsTr("NEW")
+        }
+        if (key === "nets")
+            return qsTr("NEW")
+        return ""
+    }
+
     Drawer {
         id: navDrawer
         y: window.navDocked ? topBar.height : 0
@@ -2657,6 +2704,10 @@ ApplicationWindow {
         visible: window.navDocked
         dim: !window.navDocked
         closePolicy: window.navDocked ? Popup.NoAutoClose : (Popup.CloseOnEscape | Popup.CloseOnPressOutside)
+        onClosed: {
+            if (window.pendingNav !== "")
+                Qt.callLater(function() { window.navigate(window.pendingNav) })
+        }
 
         Overlay.modal: Rectangle { color: "#99000000" }
 
@@ -2679,17 +2730,25 @@ ApplicationWindow {
             anchors.topMargin: window.navDocked ? 14 : 14 + safeAreaObj.top
             anchors.bottomMargin: 14 + safeAreaObj.bottom
             contentWidth: width
-            contentHeight: drawerColumn.implicitHeight
+            // Imperative: binding contentHeight to a ColumnLayout that also sized
+            // itself from the Flickable height froze the side menu under load.
+            property real drawerContentH: height
+            contentHeight: drawerContentH
             boundsBehavior: Flickable.StopAtBounds
             clip: true
 
             ColumnLayout {
                 id: drawerColumn
                 width: drawerFlick.width
-                height: Math.max(drawerFlick.height, implicitHeight)
                 // Nav rows carry their own padding; tighter gaps keep the whole menu visible on shorter screens
                 readonly property bool compactMenu: window.height < 900
                 spacing: compactMenu ? 4 : 8
+                onImplicitHeightChanged: {
+                    var next = Math.max(drawerColumn.implicitHeight, drawerFlick.height)
+                    if (Math.abs(drawerFlick.drawerContentH - next) < 2)
+                        return
+                    drawerFlick.drawerContentH = next
+                }
 
                 AppCard {
                     Layout.fillWidth: true
@@ -2715,7 +2774,10 @@ ApplicationWindow {
                                 id: drawerLogo
                                 anchors.fill: parent
                                 anchors.margins: 4
-                                source: "qrc:/DroidStar/images/droidstar.png"
+                                readonly property bool androidBuild: Qt.platform.os === "android"
+                                source: androidBuild
+                                        ? "qrc:/DroidStar/images/droidstar_android.png"
+                                        : "qrc:/DroidStar/images/droidstar.png"
                                 sourceSize.width: 128
                                 sourceSize.height: 128
                                 fillMode: Image.PreserveAspectFit
@@ -2724,7 +2786,11 @@ ApplicationWindow {
                                 asynchronous: true
                                 onStatusChanged: {
                                     // Dev/build fallback: if QRC is missing, try relative file (keeps UI usable).
-                                    if (status === Image.Error) source = Qt.resolvedUrl("../images/droidstar.png")
+                                    if (status === Image.Error) {
+                                        source = androidBuild
+                                                 ? Qt.resolvedUrl("../images/droidstar_android.png")
+                                                 : Qt.resolvedUrl("../images/droidstar.png")
+                                    }
                                 }
                             }
 
@@ -2766,31 +2832,7 @@ ApplicationWindow {
                 }
 
                 Repeater {
-                    model: [
-                        { key: "main",     title: qsTr("Main"),     icon: "\uf015" },
-                        {
-                            key: "scan",
-                            title: qsTr("Scan"),
-                            icon: "\uf002",
-                            badge: (appState.hoselineActiveFavCount > 0)
-                                   ? (appState.hoselineActiveFavCount + " " + qsTr("LIVE"))
-                                   : qsTr("LIVE")
-                        },
-                        {
-                            key: "messages",
-                            title: qsTr("Messages"),
-                            icon: "\uf0e0",
-                            badge: (window.smsManagerRef && window.smsManagerRef.unreadCount > 0)
-                                   ? (window.smsManagerRef.unreadCount + " " + qsTr("NEW"))
-                                   : qsTr("NEW")
-                        },
-                        { key: "settings", title: qsTr("Settings"), icon: "\uf013" },
-                        { key: "qso",      title: qsTr("QSO"),      icon: "\uf2b9" },
-                        { key: "nets",     title: qsTr("Nets"),     icon: "\uf0f3", badge: qsTr("NEW") },
-                        { key: "log",      title: qsTr("Log"),      icon: "\uf15c" },
-                        { key: "hosts",    title: qsTr("Hosts"),    icon: "\uf233" },
-                        { key: "about",    title: qsTr("About"),    icon: "\uf05a" }
-                    ]
+                    model: window.navItems
 
                     delegate: DrawerItem {
                         required property var modelData
@@ -2798,15 +2840,16 @@ ApplicationWindow {
                         compact: drawerColumn.compactMenu
                         text: modelData.title
                         iconText: modelData.icon
-                        badgeText: modelData.badge || ""
+                        badgeText: window.navBadge(modelData.key)
                         highlighted: window.currentPage === modelData.key
-                        onClicked: window.navigate(modelData.key)
+                        onClicked: window.requestNavigate(modelData.key)
                     }
                 }
 
                 Item { Layout.fillHeight: true; Layout.minimumHeight: 8 }
 
                 Label {
+                    visible: Qt.platform.os !== "android"
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: qsTr("Made with \u2665  VU3LVO")
@@ -2816,6 +2859,7 @@ ApplicationWindow {
                 }
 
                 DonateButtons {
+                    visible: Qt.platform.os !== "android"
                     Layout.fillWidth: true
                     buttonHeight: drawerColumn.compactMenu ? 40 : 46
                 }
@@ -3049,7 +3093,9 @@ ApplicationWindow {
                 width: pageHost.width
                 height: pageHost.height
                 active: isCurrent || window._visited.indexOf(modelData) >= 0
-                asynchronous: !isCurrent
+                // Always async so the first Settings visit is not built inside a menu tap
+                // while a filtered Scan list is still laying out.
+                asynchronous: true
                 visible: isCurrent
                 sourceComponent: window._componentFor(modelData)
                 // Keep a page alive once built so switching back is instant
@@ -3086,7 +3132,7 @@ ApplicationWindow {
         statuses: window.authStatus
         showSettingsButton: window.currentPage !== "settings"
         onRetryRequested: function(nets) { window.verifyDmrAuth(nets, false) }
-        onSettingsRequested: window.navigate("settings")
+        onSettingsRequested: window.requestNavigate("settings")
     }
 
     Toast {
@@ -3263,14 +3309,21 @@ ApplicationWindow {
                 Image {
                     id: splashFullLogo
                     anchors.fill: parent
-                    source: "qrc:/DroidStar/images/droidstar_logo.png"
+                    readonly property bool androidBuild: Qt.platform.os === "android"
+                    source: androidBuild
+                            ? "qrc:/DroidStar/images/droidstar_android_logo.png"
+                            : "qrc:/DroidStar/images/droidstar_logo.png"
                     sourceSize.width: 1024
                     sourceSize.height: 341
                     fillMode: Image.PreserveAspectFit
                     smooth: true
                     mipmap: true
                     onStatusChanged: {
-                        if (status === Image.Error) source = Qt.resolvedUrl("../images/droidstar_logo.png")
+                        if (status === Image.Error) {
+                            source = androidBuild
+                                     ? Qt.resolvedUrl("../images/droidstar_android_logo.png")
+                                     : Qt.resolvedUrl("../images/droidstar_logo.png")
+                        }
                     }
                 }
 
@@ -3413,7 +3466,13 @@ ApplicationWindow {
             Label {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: window.initialized ? qsTr("Ready • 73 de VU3LVO") : qsTr("Initializing Digital Voice Engine…")
+                text: {
+                    if (!window.initialized)
+                        return qsTr("Initializing Digital Voice Engine…")
+                    return Qt.platform.os === "android"
+                           ? qsTr("Ready • 73 de M8NLR")
+                           : qsTr("Ready • 73 de VU3LVO")
+                }
                 font.pixelSize: t.fsCaption
                 color: t.textMuted
                 opacity: 0.85

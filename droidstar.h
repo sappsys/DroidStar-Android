@@ -24,16 +24,23 @@
 #include <QVariantList>
 #include <QHash>
 #include <QPointer>
+#include <QFile>
 #include "mode.h"
 #include "audioengine.h"  // Make sure AudioEngine is included
 
 class QUdpSocket;
+class QNetworkReply;
 
 class DroidStar : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QStringList playbackDevices READ getPlaybackDevices NOTIFY playbackDevicesChanged)
     Q_PROPERTY(QStringList captureDevices READ getCaptureDevices NOTIFY captureDevicesChanged)
+    Q_PROPERTY(QString appUpdatePhase READ appUpdatePhase NOTIFY appUpdateChanged)
+    Q_PROPERTY(QString appUpdateAvailable READ appUpdateAvailable NOTIFY appUpdateChanged)
+    Q_PROPERTY(bool appUpdateNewer READ appUpdateNewer NOTIFY appUpdateChanged)
+    Q_PROPERTY(int appUpdatePercent READ appUpdatePercent NOTIFY appUpdateChanged)
+    Q_PROPERTY(QString appUpdateDetail READ appUpdateDetail NOTIFY appUpdateChanged)
     //Q_PROPERTY(AudioEngine* audioEngine READ getAudioEngine NOTIFY audioEngineChanged)
 
 
@@ -124,6 +131,9 @@ signals:
     void dmr_sms_ack_received(uint32_t srcId, bool success);
     // result: ok | default (TGIF security off) | rejected | unreachable | missing
     void dmr_auth_result(const QString &network, const QString &result);
+    void appUpdateChanged();
+    void app_update_state(const QString &phase, const QString &available, bool newer, int percent, const QString &detail);
+    void config_transfer(const QString &result, const QString &detail);
 public slots:
     void handle_background_state();
     void handle_foreground_state();
@@ -429,8 +439,17 @@ public slots:
     QString get_build_abi() { return QSysInfo::buildAbi(); }
     QString get_software_build();
     QVariantMap get_safe_area();
-    
 
+    QString appUpdatePhase() const { return m_appUpdatePhase; }
+    QString appUpdateAvailable() const { return m_appUpdateAvailable; }
+    bool appUpdateNewer() const { return m_appUpdateNewer; }
+    int appUpdatePercent() const { return m_appUpdatePercent; }
+    QString appUpdateDetail() const { return m_appUpdateDetail; }
+    Q_INVOKABLE void check_app_update();
+    Q_INVOKABLE void install_app_update();
+    Q_INVOKABLE void save_config();
+    Q_INVOKABLE void restore_config();
+    void complete_config_transfer(int gen, bool ok, const QString &kind);
 
     void download_file(QString, bool u = false);
     void file_downloaded(QString);
@@ -639,7 +658,31 @@ private:
     void handleHoselinePacket(const QString &packet);
     void handleHoselineMqttPayload(const QString &topic, const QString &payloadStr);
     void onHoselineUiTick();
- 
+
+    void publish_app_update(const QString &phase, const QString &available, bool newer, int percent, const QString &detail);
+    void settle_app_update_reply(QNetworkReply *reply);
+    bool launch_app_update_installer(const QString &path);
+#ifdef Q_OS_ANDROID
+    bool start_config_picker(const QString &mode, const QString &path);
+#endif
+
+    QString m_appUpdatePhase;
+    QString m_appUpdateAvailable;
+    QString m_appUpdateDetail;
+    QString m_appUpdateVersion;
+    QString m_appUpdateUrl;
+    QString m_appUpdatePath;
+    qint64 m_appUpdateSize { 0 };
+    int m_appUpdatePercent { -1 };
+    bool m_appUpdateNewer { false };
+    QNetworkAccessManager *m_appUpdateNam { nullptr };
+    QPointer<QNetworkReply> m_appUpdateReply;
+    QFile *m_appUpdateFile { nullptr };
+    QString m_configTransferMode;
+    QString m_configTransferPath;
+    int m_configTransferGen { 0 };
+    bool m_configPickerOpen { false };
+
 #ifdef Q_OS_ANDROID
     AndroidSerialPort *m_USBmonitor;
 #endif

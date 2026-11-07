@@ -24,13 +24,15 @@ Further Android builds of the same upstream version use the next letter: `0.45.0
 
 ## This Android build
 
-`scripts/build-android.sh` produces an arm64 package. It expects Qt 6.6.3 for Android (`android_arm64_v8a`), NDK 25.1, and JDK 17. The APK is written to `dist/`.
+`scripts/build-android.sh` builds the arm64 package and signs it with the release keystore in `android/release/`. That is the APK you install locally and the APK published on GitHub. It is written to `dist/DroidStar-<version>-arm64.apk`. The script expects Qt 6.6.3 for Android (`android_arm64_v8a`), NDK 25.1, and JDK 17. `scripts/package-android-release.sh` runs the same build.
+
+The keystore directory is not committed. Keep a copy of the keystore and `signing.properties`; a later public build has to use the same key.
 
 The BrandMeister live scanner is HTTPS. Qt for Android does not ship the OpenSSL libraries its TLS plugin loads, so this tree vendors OpenSSL 3.1.8 under `third_party/android_openssl/` (Apache-2.0; see that directory's `LICENSE`).
 
 Shared radio modes, keyboard PTT, and QSO replay (saved as WAV) are in the Android build. Live Activity, Bluetooth PTT, Apple Speech, and the sherpa noise model stay on iOS, where upstream ships them.
 
-What 0.45.07 added upstream — QSO Replay, hardware PTT, Simple mode, the BrandMeister and TGIF password check, and the rest of that release — is described in VU3LVO's [changelog](https://www.vu3lvo.com/droidstar/changelog).
+What 0.45.07 added upstream — QSO Replay, hardware PTT, Simple mode, the BrandMeister and TGIF password check, and the rest of that release — is described in VU3LVO's [changelog](https://www.vu3lvo.com/droidstar/changelog). Each Android letter is recorded in [CHANGELOG-Android.md](CHANGELOG-Android.md).
 
 ## Taking upstream updates
 
@@ -41,7 +43,7 @@ git fetch upstream
 git merge upstream/Main
 ```
 
-After a merge, bump the Android letter (and the matching package code) in `DroidStar.pro`, and the copy name in `scripts/build-android.sh`, then rebuild.
+After a merge that brings a new upstream version, set that Android release back to `a` when it is updated on the public repo. Update the package code in `DroidStar.pro` and [CHANGELOG-Android.md](CHANGELOG-Android.md), then rebuild. The APK name comes from the version in `DroidStar.pro`.
 
 ## License
 

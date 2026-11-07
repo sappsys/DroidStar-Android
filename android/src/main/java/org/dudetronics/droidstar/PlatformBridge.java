@@ -8,9 +8,14 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -27,6 +32,7 @@ public final class PlatformBridge {
     public static native void nativeNetTapped(String netId);
     public static native void nativeSmsTapped(String threadId);
     public static native void nativeNetDelivered(String netId);
+    public static native void nativeConfigTransferDone(boolean ok, String kind);
 
     public static void setNativeReady(Context context, boolean ready) {
         sNativeReady = ready;
@@ -195,5 +201,61 @@ public final class PlatformBridge {
 
     private static int stableCode(String id) {
         return id == null ? 0 : id.hashCode();
+    }
+
+    public static boolean canInstallPackages(Context context) {
+        if (Build.VERSION.SDK_INT < 26) {
+            return true;
+        }
+        return context.getPackageManager().canRequestPackageInstalls();
+    }
+
+    public static void openUnknownSourcesSettings(Context context) {
+        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+        intent.setData(Uri.parse("package:" + context.getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            context.startActivity(intent);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    public static boolean installApk(Context context, String path) {
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        File apk = new File(path);
+        if (!apk.isFile()) {
+            return false;
+        }
+        Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".qtprovider", apk);
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(uri, "application/vnd.android.package-archive");
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            context.startActivity(intent);
+            return true;
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    public static void beginConfigTransfer(Context context, String mode, String path) {
+        Intent intent = new Intent(context, ConfigTransferActivity.class);
+        intent.putExtra(ConfigTransferActivity.EXTRA_MODE, mode);
+        intent.putExtra(ConfigTransferActivity.EXTRA_PATH, path);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        context.startActivity(intent);
+    }
+
+    public static void restartApp(Context context) {
+        PackageManager pm = context.getPackageManager();
+        Intent launch = pm.getLaunchIntentForPackage(context.getPackageName());
+        if (launch == null) {
+            return;
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        context.startActivity(launch);
+        Runtime.getRuntime().exit(0);
     }
 }

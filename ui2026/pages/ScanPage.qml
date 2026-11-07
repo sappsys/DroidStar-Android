@@ -148,9 +148,25 @@ Page {
     ListModel { id: liveCardsModel }
     ListModel { id: favCardsModel }
 
+    // Stop card/layout work before a menu navigation. Building Settings in the same
+    // pass as a filtered live list was freezing the whole display.
+    property bool _paused: false
+    readonly property int liveCardCap: 40
+
+    function pauseForNavigation() {
+        page._paused = true
+        if (scanSearchField.activeFocus)
+            scanSearchField.focus = false
+    }
+
     function _syncCardsModel(targetModel, sourceArray) {
+        if (page._paused)
+            return
         var src = sourceArray || []
-        for (var i = 0; i < src.length; i++) {
+        var limit = targetModel === liveCardsModel
+                    ? Math.min(src.length, page.liveCardCap)
+                    : src.length
+        for (var i = 0; i < limit; i++) {
             var item = src[i]
             if (!item) continue
             var row = {
@@ -171,16 +187,20 @@ Page {
             else
                 targetModel.append(row)
         }
-        while (targetModel.count > src.length)
+        while (targetModel.count > limit)
             targetModel.remove(targetModel.count - 1)
     }
 
     // Hoseline pushes a fresh table every ~800 ms while live; only rewrite the card models when
     // this page is actually on screen, and catch up once when it becomes visible again.
-    onFilteredHoselineCallsChanged: if (page.visible) page._syncCardsModel(liveCardsModel, page.filteredHoselineCalls)
-    onFilteredFavCallsChanged: if (page.visible) page._syncCardsModel(favCardsModel, page.filteredFavCalls)
+    onFilteredHoselineCallsChanged: if (page.visible && !page._paused) page._syncCardsModel(liveCardsModel, page.filteredHoselineCalls)
+    onFilteredFavCallsChanged: if (page.visible && !page._paused) page._syncCardsModel(favCardsModel, page.filteredFavCalls)
     onVisibleChanged: {
-        if (!page.visible) return
+        if (!page.visible) {
+            page._paused = true
+            return
+        }
+        page._paused = false
         page._syncCardsModel(liveCardsModel, page.filteredHoselineCalls)
         page._syncCardsModel(favCardsModel, page.filteredFavCalls)
     }
@@ -193,7 +213,10 @@ Page {
         id: scroller
         anchors.fill: parent
         contentWidth: width
-        contentHeight: contentWrap.implicitHeight + 32
+        // Imperative height: binding contentHeight to a live card grid's implicitHeight
+        // re-enters layout forever when Settings is opened over a filtered list.
+        property real scanContentH: height
+        contentHeight: scanContentH
         boundsBehavior: Flickable.DragOverBounds
         clip: true
         ScrollIndicator.vertical: ScrollIndicator {}
@@ -204,6 +227,12 @@ Page {
             y: 12
             width: Math.min(scroller.width - 20, 1080)
             spacing: 12
+            onImplicitHeightChanged: {
+                var next = contentWrap.implicitHeight + 32
+                if (Math.abs(scroller.scanContentH - next) < 2)
+                    return
+                scroller.scanContentH = next
+            }
 
             // ─────────────────────────────────────────────────────────
             // TOP TAB SWITCHER + LIVE STREAM STATUS BAR
@@ -616,21 +645,25 @@ Page {
                         ChipToggle {
                             text: qsTr("All (%1)").arg(page.appState && page.appState.hoselineCalls ? page.appState.hoselineCalls.length : 0)
                             checked: page.filterMode === "all"
-                            onClicked: page.filterMode = "all"
+                            onClicked: Qt.callLater(function() { page.filterMode = "all" })
                         }
                         ChipToggle {
                             text: qsTr("On Air (%1)").arg(page.appState ? (page.appState.hoselineLiveCount || 0) : 0)
                             glyph: "\uf111"
                             activeColor: t.success
                             checked: page.filterMode === "live"
-                            onClicked: page.filterMode = (page.filterMode === "live" ? "all" : "live")
+                            onClicked: Qt.callLater(function() {
+                                page.filterMode = (page.filterMode === "live" ? "all" : "live")
+                            })
                         }
                         ChipToggle {
                             text: qsTr("Starred (%1)").arg(page.appState ? (page.appState.hoselineActiveFavCount || 0) : 0)
                             glyph: "\uf005"
                             activeColor: t.warning
                             checked: page.filterMode === "fav"
-                            onClicked: page.filterMode = (page.filterMode === "fav" ? "all" : "fav")
+                            onClicked: Qt.callLater(function() {
+                                page.filterMode = (page.filterMode === "fav" ? "all" : "fav")
+                            })
                         }
                     }
                 }
@@ -717,7 +750,9 @@ Page {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 100
                             Layout.minimumWidth: 0
-                            implicitHeight: cardInnerCol.implicitHeight + 20
+                            Layout.preferredHeight: 118
+                            Layout.maximumHeight: 118
+                            implicitHeight: 118
                             radius: 14
                             clip: true
                             scale: (cardTapMouse.pressed || tuneMouse.pressed) ? 0.99 : 1.0
@@ -1138,7 +1173,9 @@ Page {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 100
                             Layout.minimumWidth: 0
-                            implicitHeight: favInnerCol.implicitHeight + 22
+                            Layout.preferredHeight: 118
+                            Layout.maximumHeight: 118
+                            implicitHeight: 118
                             radius: 14
                             clip: true
                             scale: (favCardTapMouse.pressed || favTuneMouse.pressed) ? 0.99 : 1.0

@@ -131,7 +131,10 @@ Page {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: contentLayout.implicitHeight + 40
+        // Imperative height avoids a layout loop when Settings is first built
+        // while Scan still has a filtered live card grid.
+        property real settingsContentH: height
+        contentHeight: settingsContentH
         boundsBehavior: Flickable.DragOverBounds
         ScrollIndicator.vertical: ScrollIndicator {}
 
@@ -141,6 +144,12 @@ Page {
             y: 12
             width: Math.min(flick.width - 20, t.maxContentWidth)
             spacing: 12
+            onImplicitHeightChanged: {
+                var next = contentLayout.implicitHeight + 40
+                if (Math.abs(flick.settingsContentH - next) < 2)
+                    return
+                flick.settingsContentH = next
+            }
 
             // ─────────────────────────────────────────────────────────
             // IDENTITY

@@ -2866,8 +2866,12 @@ Page {
             x: contentRow.x
             y: contentRow.y + contentRow.implicitHeight + 12
             width: contentRow.width
-            implicitHeight: (sideBySide ? Math.max(footerText.implicitHeight, footerButtons.implicitHeight)
-                                        : footerText.implicitHeight + 10 + footerButtons.implicitHeight) + 24
+            implicitHeight: {
+                if (!footerButtons.visible)
+                    return footerText.implicitHeight + 24
+                return (sideBySide ? Math.max(footerText.implicitHeight, footerButtons.implicitHeight)
+                                   : footerText.implicitHeight + 10 + footerButtons.implicitHeight) + 24
+            }
             radius: t.rMd
             clip: true
             color: t.surface2
@@ -2877,7 +2881,7 @@ Page {
             // Decided after the layout pass: flipping it mid-pass changes several layout properties at once
             property bool sideBySide: false
             function updateArrangement() {
-                var v = width >= 560
+                var v = footerButtons.visible && width >= 560
                 if (v !== sideBySide) sideBySide = v
             }
             onWidthChanged: Qt.callLater(updateArrangement)
@@ -2936,7 +2940,7 @@ Page {
                             Label {
                                 id: vuCallLabel
                                 anchors.centerIn: parent
-                                text: "VU3LVO"
+                                text: Qt.platform.os === "android" ? "M8NLR" : "VU3LVO"
                                 font.pixelSize: t.fsCaption
                                 font.bold: true
                                 color: t.accent
@@ -2948,7 +2952,9 @@ Page {
                 Label {
                     width: parent.width
                     horizontalAlignment: homeFooter.sideBySide ? Text.AlignLeft : Text.AlignHCenter
-                    text: qsTr("Built for the amateur radio community. Your support keeps DroidStar free and on the air for everyone.")
+                    text: Qt.platform.os === "android"
+                          ? qsTr("Built for the amateur radio community.")
+                          : qsTr("Built for the amateur radio community. Your support keeps DroidStar free and on the air for everyone.")
                     font.pixelSize: t.fsCaption
                     color: t.textMuted
                     opacity: 0.9
@@ -2959,6 +2965,7 @@ Page {
             // Support buttons: equal split under the text on phones, compact pills on the right when wide
             RowLayout {
                 id: footerButtons
+                visible: Qt.platform.os !== "android"
                 anchors.right: parent.right
                 anchors.rightMargin: 12
                 // Explicit width: dropping a left anchor at runtime would keep the stretched width
