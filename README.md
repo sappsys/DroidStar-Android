@@ -1,6 +1,6 @@
 # DroidStar Android
 
-Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. This Android line is at **0.45.07b** (public release **0.45.07a**).
+Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public Android release is **0.45.07a**.
 
 DroidStar is a free, GPL digital ham radio app: DMR on BrandMeister, YSF, M17, P25, NXDN, D-STAR, and AllStar. You need an amateur licence. The phone talks to the network the way a hotspot would.
 
@@ -16,7 +16,7 @@ The iOS app, TestFlight invites, and that changelog stay with VU3LVO. Questions 
 
 ## What this line does
 
-- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of Android 0.45.07a and later letters.
+- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of Android 0.45.07a.
 - Merges later upstream updates and ships them as the next Android build.
 - Leaves the iOS project intact. Android work is in the `android:` project settings, the `android/` package, and `Q_OS_ANDROID` sections.
 
@@ -26,7 +26,7 @@ Further Android builds of the same upstream version use the next letter: `0.45.0
 
 `scripts/build-android.sh` builds the arm64 package and signs it with the release keystore in `android/release/`. That is the APK you install locally and the APK published on GitHub. It is written to `dist/DroidStar-<version>-arm64.apk`. The script expects Qt 6.6.3 for Android (`android_arm64_v8a`), NDK 25.1, and JDK 17. `scripts/package-android-release.sh` runs the same build.
 
-The keystore directory is not committed. Keep a copy of the keystore and `signing.properties`; a later public build has to use the same key.
+The keystore directory is not committed. To build a signed APK you need your own keystore and a matching `signing.properties` in `android/release/`. The published GitHub APKs use the project release key, which is not in this repository; keep a private copy of that keystore if you will ship further upgrades of the same package.
 
 The BrandMeister live scanner is HTTPS. Qt for Android does not ship the OpenSSL libraries its TLS plugin loads, so this tree vendors OpenSSL 3.1.8 under `third_party/android_openssl/` (Apache-2.0; see that directory's `LICENSE`).
 
