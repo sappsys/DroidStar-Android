@@ -15,7 +15,7 @@ RC_ICONS = images/droidstar.ico
 win32:RC_ICONS = images/droidstar_android.ico
 ICON = images/droidstar.icns
 # Same product letter as Android for this line. Packaging lives in windows/.
-win32:DEFINES += APP_VERSION=\\\"0.45.07b\\\"
+win32:DEFINES += APP_VERSION=\\\"0.45.07c\\\"
 win32:DEFINES += DROIDSTAR_WINDOWS=1
 macx:LIBS += -framework AVFoundation -framework Accelerate -framework Metal -framework MetalKit
 macx:DEFINES += GGML_USE_ACCELERATE GGML_USE_METAL
@@ -347,9 +347,9 @@ macx:HEADERS += micpermission.h
 # through z. A new upstream version starts again at a. Keep win32 APP_VERSION in
 # lockstep. Android package code is the upstream number times 100, plus the letter
 # index (a is 1): 0.45.07a is 450701, 0.45.08a is 450801.
-android:ANDROID_VERSION_NAME = 0.45.07b
-android:ANDROID_VERSION_CODE = 450702
-android:DEFINES += APP_VERSION=\\\"0.45.07b\\\"
+android:ANDROID_VERSION_NAME = 0.45.07c
+android:ANDROID_VERSION_CODE = 450703
+android:DEFINES += APP_VERSION=\\\"0.45.07c\\\"
 android:ANDROID_MIN_SDK_VERSION = 31
 android:ANDROID_TARGET_SDK_VERSION = 34
 android:ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android

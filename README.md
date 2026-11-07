@@ -1,6 +1,6 @@
 # DroidStar Android
 
-Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public release is **0.45.07b** (Android APK and Windows x64 zip).
+Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public release is **0.45.07b** (Android APK and Windows x64 zip). Local builds report **0.45.07c**.
 
 DroidStar is a free, GPL digital ham radio app: DMR on BrandMeister, YSF, M17, P25, NXDN, D-STAR, and AllStar. You need an amateur licence. The phone talks to the network the way a hotspot would.
 

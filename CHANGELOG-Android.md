@@ -6,7 +6,7 @@ Android and Windows share the same product letter for this line (`0.45.07a`, the
 
 ## Unreleased
 
-Not on the public repo yet. These notes move under the next letter when that update is published.
+Not on the public repo yet. These notes move under the next letter when that update is published. Local builds already report **0.45.07c**, matching Windows.
 
 ## 0.45.07b
 
