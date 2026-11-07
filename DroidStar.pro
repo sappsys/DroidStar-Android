@@ -2,13 +2,21 @@ QT += quick quickcontrols2 network multimedia core gui concurrent
 
 unix:!ios:!android:QT += serialport
 win32:QT += serialport
+# Desktop settings export/restore uses QFileDialog.
+!android:!ios:QT += widgets
 !win32:LIBS += -ldl
-win32:LIBS += -lws2_32
-win32:QMAKE_LFLAGS += -static
+win32:LIBS += -lws2_32 -lz
+# Dynamic Qt + windeployqt for a self-contained folder. MinGW may still
+# prefer a static runtime; do not force a fully static Qt link.
+win32-g++:QMAKE_LFLAGS += -static-libgcc -static-libstdc++
 QMAKE_LFLAGS_WINDOWS += --enable-stdcall-fixup
 VERSION = 0.45.07
 RC_ICONS = images/droidstar.ico
+win32:RC_ICONS = images/droidstar_android.ico
 ICON = images/droidstar.icns
+# Same product letter as Android for this line. Packaging lives in windows/.
+win32:DEFINES += APP_VERSION=\\\"0.45.07b\\\"
+win32:DEFINES += DROIDSTAR_WINDOWS=1
 macx:LIBS += -framework AVFoundation -framework Accelerate -framework Metal -framework MetalKit
 macx:DEFINES += GGML_USE_ACCELERATE GGML_USE_METAL
 macx:QMAKE_MACOSX_DEPLOYMENT_TARGET = 12.0
@@ -17,6 +25,10 @@ ios:LIBS += -framework AVFoundation -framework AudioToolbox -framework UIKit -fr
 ios:IPHONESIMULATOR_ARCHS = x86_64 arm64
 ios:CONFIG(iphonesimulator, iphoneos|iphonesimulator):LIBS += -L$$PWD/third_party/sherpa-onnx/lib/ios-simulator -lsherpa-onnx -lonnxruntime
 ios:CONFIG(iphoneos, iphoneos|iphonesimulator):LIBS += -L$$PWD/third_party/sherpa-onnx/lib/ios-arm64 -lsherpa-onnx -lonnxruntime
+# Neural TX clarity (GTCRN via sherpa-onnx). Windows ships DLLs next to the EXE;
+# Android loads the arm64 .so files through ANDROID_EXTRA_LIBS.
+win32:LIBS += -L$$PWD/third_party/sherpa-onnx/lib/win-x64 -lsherpa-onnx-c-api -lonnxruntime
+android:LIBS += -L$$PWD/third_party/sherpa-onnx/lib/android-arm64-v8a -lsherpa-onnx-c-api -lonnxruntime
 ios:DEFINES += GGML_USE_ACCELERATE GGML_USE_METAL
 ios:QMAKE_IOS_DEPLOYMENT_TARGET=15.1
 ios:QMAKE_TARGET_BUNDLE_PREFIX = org.dudetronics
@@ -107,6 +119,9 @@ SOURCES += \
 # Android-specific source files
 android:QT += core-private
 android:SOURCES += androidserialport.cpp android_platform.cpp
+
+# Desktop stand-ins for iOS bridges (Windows / Linux / macOS)
+!ios:!android:SOURCES += desktop_platform.cpp
 
 # Non-iOS source files
 !ios:SOURCES += serialambe.cpp serialmodem.cpp
@@ -328,9 +343,10 @@ SOURCES += \
 android:HEADERS += androidserialport.h
 macx:HEADERS += micpermission.h
 !ios:HEADERS += serialambe.h serialmodem.h
-# Android letter of an upstream version: 0.45.07a, then b through z. A new upstream
-# version starts again at a. Package code is the upstream number times 100, plus the
-# letter index (a is 1): 0.45.07a is 450701, 0.45.08a is 450801.
+# Shared Android + Windows product letter for an upstream version: 0.45.07a, then b
+# through z. A new upstream version starts again at a. Keep win32 APP_VERSION in
+# lockstep. Android package code is the upstream number times 100, plus the letter
+# index (a is 1): 0.45.07a is 450701, 0.45.08a is 450801.
 android:ANDROID_VERSION_NAME = 0.45.07b
 android:ANDROID_VERSION_CODE = 450702
 android:DEFINES += APP_VERSION=\\\"0.45.07b\\\"
@@ -341,7 +357,9 @@ android:ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 # so without these libraries the scan page never leaves "Connecting…".
 android:ANDROID_EXTRA_LIBS += \
     $$PWD/third_party/android_openssl/arm64-v8a/libcrypto_3.so \
-    $$PWD/third_party/android_openssl/arm64-v8a/libssl_3.so
+    $$PWD/third_party/android_openssl/arm64-v8a/libssl_3.so \
+    $$PWD/third_party/sherpa-onnx/lib/android-arm64-v8a/libonnxruntime.so \
+    $$PWD/third_party/sherpa-onnx/lib/android-arm64-v8a/libsherpa-onnx-c-api.so
 
 contains(DEFINES, USE_FLITE){
 	LIBS += -lflite_cmu_us_slt -lflite_cmu_us_kal16 -lflite_cmu_us_awb -lflite_cmu_us_rms -lflite_usenglish -lflite_cmulex -lflite -lasound

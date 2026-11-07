@@ -1668,6 +1668,8 @@ Page {
                                                     MouseArea {
                                                         id: clarityCardMouse
                                                         anchors.fill: parent
+                                                        // Keep vertical scroll in the parent Flickable from eating card taps.
+                                                        preventStealing: true
                                                         hoverEnabled: Qt.platform.os !== "ios" && Qt.platform.os !== "android"
                                                         pressAndHoldInterval: 360
                                                         cursorShape: Qt.PointingHandCursor
@@ -2940,7 +2942,7 @@ Page {
                             Label {
                                 id: vuCallLabel
                                 anchors.centerIn: parent
-                                text: Qt.platform.os === "android" ? "M8NLR" : "VU3LVO"
+                                text: (Qt.platform.os === "android" || Qt.platform.os === "windows") ? "M8NLR" : "VU3LVO"
                                 font.pixelSize: t.fsCaption
                                 font.bold: true
                                 color: t.accent
@@ -2952,7 +2954,7 @@ Page {
                 Label {
                     width: parent.width
                     horizontalAlignment: homeFooter.sideBySide ? Text.AlignLeft : Text.AlignHCenter
-                    text: Qt.platform.os === "android"
+                    text: (Qt.platform.os === "android" || Qt.platform.os === "windows")
                           ? qsTr("Built for the amateur radio community.")
                           : qsTr("Built for the amateur radio community. Your support keeps DroidStar free and on the air for everyone.")
                     font.pixelSize: t.fsCaption
@@ -2965,7 +2967,7 @@ Page {
             // Support buttons: equal split under the text on phones, compact pills on the right when wide
             RowLayout {
                 id: footerButtons
-                visible: Qt.platform.os !== "android"
+                visible: Qt.platform.os !== "android" && Qt.platform.os !== "windows"
                 anchors.right: parent.right
                 anchors.rightMargin: 12
                 // Explicit width: dropping a left anchor at runtime would keep the stretched width

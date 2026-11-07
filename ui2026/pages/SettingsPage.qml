@@ -1522,11 +1522,12 @@ Page {
                         columnSpacing: 8
                         rowSpacing: 8
                         AppButton {
+                            // BLE learn/scan is iOS CoreBluetooth only today.
+                            visible: !!pttSection.mgr && pttSection.mgr.bleSupported
                             Layout.fillWidth: true
                             text: qsTr("Add Bluetooth button")
                             tone: "primary"
                             glyph: "\uf294"
-                            enabled: !!pttSection.mgr && pttSection.mgr.bleSupported
                             onClicked: pttAddSheet.openForScan()
                         }
                         AppButton {
@@ -1536,6 +1537,15 @@ Page {
                             enabled: !!pttSection.mgr
                             onClicked: pttAddSheet.openForKey()
                         }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: !!pttSection.mgr && !pttSection.mgr.bleSupported
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: t.fsCaption
+                        color: t.textMuted
+                        text: qsTr("Bluetooth LE PTT buttons are available on iOS. On this build, use a keyboard-type button, or the on-screen PTT.")
                     }
 
                     Label {
@@ -1552,7 +1562,11 @@ Page {
                         wrapMode: Text.WordWrap
                         font.pixelSize: t.fsCaption
                         color: t.textMuted
-                        text: qsTr("Bluetooth buttons work with the screen off. Keyboard buttons work only while the app is open. For the iPhone Action Button, Siri or Shortcuts, use the DroidStar \"Push to Talk\" shortcut.")
+                        text: {
+                            if (pttSection.mgr && pttSection.mgr.bleSupported)
+                                return qsTr("Bluetooth buttons work with the screen off. Keyboard buttons work only while the app is open. For the iPhone Action Button, Siri or Shortcuts, use the DroidStar \"Push to Talk\" shortcut.")
+                            return qsTr("Keyboard buttons work only while the app is open.")
+                        }
                     }
                 }
             }

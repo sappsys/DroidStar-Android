@@ -270,6 +270,7 @@ public slots:
         }
     }
     bool get_tx_enhance() { return AudioEngine::globalTxEnhance(); }
+    Q_INVOKABLE bool is_external_mic_active() { return AudioEngine::isExternalMicActive(); }
     void set_voice_isolation(bool on)
     {
         AudioEngine::setGlobalVoiceIsolation(on);

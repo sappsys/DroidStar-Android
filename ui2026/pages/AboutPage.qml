@@ -31,6 +31,8 @@ Page {
     required property var droidstarRef
     property Component headerActions: null
     readonly property bool androidBuild: Qt.platform.os === "android"
+    readonly property bool windowsBuild: Qt.platform.os === "windows"
+    readonly property bool m8nlrBuild: androidBuild || windowsBuild
 
     Tokens { id: t }
 
@@ -73,7 +75,7 @@ Page {
 
     Connections {
         target: page.droidstarRef
-        enabled: page.androidBuild && !!page.droidstarRef
+        enabled: page.m8nlrBuild && !!page.droidstarRef
         function onConfig_transfer(result, detail) {
             settingsDetail.text = detail || ""
             settingsDetail.warning = (result === "failed")
@@ -104,7 +106,7 @@ Page {
                     Image {
                         id: aboutWhiteLogo
                         readonly property real targetW: Math.min(Math.max(180, parent.width - 24), 260)
-                        source: page.androidBuild
+                        source: page.m8nlrBuild
                                 ? "qrc:/DroidStar/images/droidstar_android_logo_white.png"
                                 : "qrc:/DroidStar/images/droidstar_logo_white.png"
                         sourceSize.width: 684
@@ -118,7 +120,7 @@ Page {
                         asynchronous: true
                         onStatusChanged: {
                             if (status === Image.Error) {
-                                source = page.androidBuild
+                                source = page.m8nlrBuild
                                          ? Qt.resolvedUrl("../../images/droidstar_android_logo_white.png")
                                          : Qt.resolvedUrl("../../images/droidstar_logo_white.png")
                             }
@@ -127,11 +129,16 @@ Page {
 
                     Label {
                         text: {
-                            if (page.buildVer === "")
-                                return page.androidBuild ? qsTr("Android build") : qsTr("iOS build")
-                            return page.androidBuild
-                                   ? qsTr("Android build - V%1").arg(page.buildVer)
-                                   : qsTr("iOS build - V%1").arg(page.buildVer)
+                            if (page.buildVer === "") {
+                                if (page.androidBuild) return qsTr("Android build")
+                                if (page.windowsBuild) return qsTr("Windows build")
+                                return qsTr("iOS build")
+                            }
+                            if (page.androidBuild)
+                                return qsTr("Android build - V%1").arg(page.buildVer)
+                            if (page.windowsBuild)
+                                return qsTr("Windows build - V%1").arg(page.buildVer)
+                            return qsTr("iOS build - V%1").arg(page.buildVer)
                         }
                         font.pixelSize: t.fsBody
                         color: t.text
@@ -199,7 +206,7 @@ Page {
             }
 
             AppCard {
-                visible: page.androidBuild
+                visible: page.m8nlrBuild
                 Layout.fillWidth: true
                 ColumnLayout {
                     anchors.fill: parent
@@ -260,7 +267,7 @@ Page {
                         color: t.text
                         opacity: 0.9
                         lineHeight: 1.3
-                        text: page.androidBuild
+                        text: page.m8nlrBuild
                               ? qsTr("Original Copyright (C) 2019-2021 Doug McLain AD8DP\n\n" +
                                      "Upstream Copyright (C) 2024 Rohith Namboothiri VU3LVO\n\n" +
                                      "Modification Copyright (C) 2026 M8NLR\n\n" +
@@ -312,15 +319,19 @@ Page {
                         color: t.text
                         opacity: 0.9
                         lineHeight: 1.3
-                        text: page.androidBuild
-                              ? qsTr("This Android version is made by M8NLR and is available for public release. It tracks the upstream DroidStar work of Rohith Namboothiri VU3LVO, based on the original app by Doug McLain AD8DP.")
-                              : qsTr("This customized iOS version, built and distributed by VU3LVO, is specifically designed for use by a select group and is not intended for public use at the moment.")
+                        text: {
+                            if (page.androidBuild)
+                                return qsTr("This Android version is made by M8NLR and is available for public release. It tracks the upstream DroidStar work of Rohith Namboothiri VU3LVO, based on the original app by Doug McLain AD8DP.")
+                            if (page.windowsBuild)
+                                return qsTr("This Windows version is made by M8NLR and is available for public release. It uses the same app UI as the Android line, with USB AMBE and MMDVM dongle support from the original DroidStar desktop path, tracking upstream work by Rohith Namboothiri VU3LVO and Doug McLain AD8DP.")
+                            return qsTr("This customized iOS version, built and distributed by VU3LVO, is specifically designed for use by a select group and is not intended for public use at the moment.")
+                        }
                     }
                 }
             }
 
             AppCard {
-                visible: !page.androidBuild
+                visible: !page.m8nlrBuild
                 Layout.fillWidth: true
                 ColumnLayout {
                     anchors.fill: parent
@@ -353,7 +364,7 @@ Page {
                     Label { text: qsTr("Project Links"); font.pixelSize: 15; font.bold: true; color: t.text }
 
                     AppButton {
-                        visible: !page.androidBuild
+                        visible: !page.m8nlrBuild
                         Layout.fillWidth: true
                         text: qsTr("Visit Official Website")
                         glyph: "\uf0ac"
@@ -364,7 +375,7 @@ Page {
                         Layout.fillWidth: true
                         text: qsTr("GitHub Project Page")
                         glyph: "\uf09b"
-                        onClicked: Qt.openUrlExternally(page.androidBuild
+                        onClicked: Qt.openUrlExternally(page.m8nlrBuild
                                                         ? "https://github.com/sappsys/DroidStar-Android"
                                                         : "https://github.com/rohithzmoi/Droidstar-DMR")
                     }

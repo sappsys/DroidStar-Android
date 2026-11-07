@@ -17,10 +17,12 @@
 
 #include "droidstar.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
@@ -30,6 +32,8 @@
 #include <QJniEnvironment>
 #include <QJniObject>
 #include <QtCore/private/qandroidextras_p.h>
+#elif !defined(Q_OS_IOS)
+#include <QFileDialog>
 #endif
 
 namespace {
@@ -50,6 +54,42 @@ bool looksLikeSettings(const QStringList &keys)
             return true;
     }
     return false;
+}
+
+bool applySettingsMerge(QSettings *dest, const QString &path)
+{
+    QSettings incoming(path, QSettings::IniFormat);
+    incoming.sync();
+    const QStringList keys = incoming.allKeys();
+    if (incoming.status() != QSettings::NoError || !looksLikeSettings(keys))
+        return false;
+    // Keep keys this version already has. The file only overwrites keys it contains.
+    for (const QString &key : keys)
+        dest->setValue(key, incoming.value(key));
+    dest->sync();
+    return true;
+}
+
+void restartApplication()
+{
+#ifdef Q_OS_ANDROID
+    QTimer::singleShot(400, []() {
+        const QJniObject context(QNativeInterface::QAndroidApplication::context());
+        QJniObject::callStaticMethod<void>(
+            "org/dudetronics/droidstar/PlatformBridge",
+            "restartApp",
+            "(Landroid/content/Context;)V",
+            context.object<jobject>());
+    });
+#elif !defined(Q_OS_IOS)
+    QTimer::singleShot(400, []() {
+        QStringList args = QCoreApplication::arguments();
+        if (!args.isEmpty())
+            args.removeFirst();
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), args);
+        QCoreApplication::quit();
+    });
+#endif
 }
 
 #ifdef Q_OS_ANDROID
@@ -122,9 +162,7 @@ bool beginPicker(DroidStar *self, int gen, const QString &mode, const QString &p
 
 void DroidStar::save_config()
 {
-#ifndef Q_OS_ANDROID
-    emit config_transfer(QStringLiteral("failed"), QStringLiteral("Save the settings file from the Android build."));
-#else
+#ifdef Q_OS_ANDROID
     // Read the settings file in place. Export must not rewrite or replace it.
     QFile source(m_settings->fileName());
     if (!source.open(QIODevice::ReadOnly)) {
@@ -146,18 +184,68 @@ void DroidStar::save_config()
     out.close();
     if (!start_config_picker(QStringLiteral("export"), path))
         emit config_transfer(QStringLiteral("failed"), QStringLiteral("Could not open the file picker."));
+#elif defined(Q_OS_IOS)
+    emit config_transfer(QStringLiteral("failed"), QStringLiteral("Settings export is available on the Android and Windows builds."));
+#else
+    QFile source(m_settings->fileName());
+    if (!source.open(QIODevice::ReadOnly)) {
+        emit config_transfer(QStringLiteral("failed"), QStringLiteral("Could not read the settings file."));
+        return;
+    }
+    const QByteArray bytes = source.readAll();
+    source.close();
+    if (bytes.isEmpty()) {
+        emit config_transfer(QStringLiteral("failed"), QStringLiteral("There are no settings to export yet."));
+        return;
+    }
+
+    const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString dest = QFileDialog::getSaveFileName(
+        nullptr,
+        tr("Export settings"),
+        docs + QLatin1String("/droidstar-settings.conf"),
+        tr("DroidStar settings (*.conf);;All files (*)"));
+    if (dest.isEmpty()) {
+        emit config_transfer(QStringLiteral("cancelled"), QString());
+        return;
+    }
+    QFile out(dest);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate) || out.write(bytes) != bytes.size()) {
+        emit config_transfer(QStringLiteral("failed"), QStringLiteral("Could not write the settings file."));
+        return;
+    }
+    emit config_transfer(QStringLiteral("saved"),
+                         QStringLiteral("Exported a copy. The settings in the app are unchanged."));
 #endif
 }
 
 void DroidStar::restore_config()
 {
-#ifndef Q_OS_ANDROID
-    emit config_transfer(QStringLiteral("failed"), QStringLiteral("Restore the settings file from the Android build."));
-#else
+#ifdef Q_OS_ANDROID
     const QString path = transferPath(QStringLiteral("droidstar-restore.conf"));
     QFile::remove(path);
     if (!start_config_picker(QStringLiteral("import"), path))
         emit config_transfer(QStringLiteral("failed"), QStringLiteral("Could not open the file picker."));
+#elif defined(Q_OS_IOS)
+    emit config_transfer(QStringLiteral("failed"), QStringLiteral("Settings restore is available on the Android and Windows builds."));
+#else
+    const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString path = QFileDialog::getOpenFileName(
+        nullptr,
+        tr("Restore settings"),
+        docs,
+        tr("DroidStar settings (*.conf);;All files (*)"));
+    if (path.isEmpty()) {
+        emit config_transfer(QStringLiteral("cancelled"), QString());
+        return;
+    }
+    if (!applySettingsMerge(m_settings, path)) {
+        emit config_transfer(QStringLiteral("failed"), QStringLiteral("That file is not a DroidStar settings file."));
+        return;
+    }
+    emit config_transfer(QStringLiteral("restored"),
+                         QStringLiteral("Restored. Settings already in this version were kept. Starting the app again."));
+    restartApplication();
 #endif
 }
 
@@ -181,35 +269,14 @@ void DroidStar::complete_config_transfer(int gen, bool ok, const QString &kind)
         return;
     }
 
-    bool applied = false;
-    {
-        QSettings incoming(m_configTransferPath, QSettings::IniFormat);
-        incoming.sync();
-        const QStringList keys = incoming.allKeys();
-        if (incoming.status() == QSettings::NoError && looksLikeSettings(keys)) {
-            // Keep keys this version already has. The file only overwrites keys it contains.
-            for (const QString &key : keys)
-                m_settings->setValue(key, incoming.value(key));
-            m_settings->sync();
-            applied = true;
-        }
-    }
+    const bool applied = applySettingsMerge(m_settings, m_configTransferPath);
     QFile::remove(m_configTransferPath);
     if (!applied) {
         emit config_transfer(QStringLiteral("failed"), QStringLiteral("That file is not a DroidStar settings file."));
         return;
     }
     emit config_transfer(QStringLiteral("restored"), QStringLiteral("Restored. Settings already in this version were kept. Starting the app again."));
-#ifdef Q_OS_ANDROID
-    QTimer::singleShot(400, this, []() {
-        const QJniObject context(QNativeInterface::QAndroidApplication::context());
-        QJniObject::callStaticMethod<void>(
-            "org/dudetronics/droidstar/PlatformBridge",
-            "restartApp",
-            "(Landroid/content/Context;)V",
-            context.object<jobject>());
-    });
-#endif
+    restartApplication();
 }
 
 #ifdef Q_OS_ANDROID

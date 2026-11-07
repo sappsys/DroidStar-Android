@@ -4088,13 +4088,38 @@ typedef struct SherpaOnnxOfflineSpeechDenoiserGtcrnModelConfig {
 typedef struct SherpaOnnxOfflineSpeechDenoiserDpdfNetModelConfig {
   /** Model filename. */
   const char *model;
+  /**
+   * Offline attenuation limit in dB.
+   *
+   * Values greater than 0 limit suppression. The maximum finite value is 100.
+   * Set to 0 or infinity to disable the limit. Must match sherpa-onnx >= 2.0
+   * shared-library layout (Win/Android Neural AI).
+   */
+  float attenuation_limit_db;
 } SherpaOnnxOfflineSpeechDenoiserDpdfNetModelConfig;
+
+/** @brief VoxLock offline denoiser model configuration (sherpa-onnx >= 2.0). */
+typedef struct SherpaOnnxOfflineSpeechDenoiserVoxLockModelConfig {
+  /** Path to the VoxLock enroll model, e.g. `enroll.onnx`. */
+  const char *enroll_model;
+  /** Path to the VoxLock chunk model, e.g. `chunk.onnx`. */
+  const char *chunk_model;
+  /**
+   * Optional path to a wave file with the caller's voice. Empty is fine when
+   * using GTCRN only.
+   */
+  const char *voice_sample;
+} SherpaOnnxOfflineSpeechDenoiserVoxLockModelConfig;
 
 /**
  * @brief Speech denoiser model configuration shared by offline and online APIs.
  *
  * Configure exactly one model family. If multiple model families are provided,
  * one is chosen and the choice is implementation-defined.
+ *
+ * Layout must match the sherpa-onnx shared libraries we ship (v2.0.1). Extra
+ * trailing fields stay zero for GTCRN-only use; older iOS static libs ignore
+ * them.
  */
 typedef struct SherpaOnnxOfflineSpeechDenoiserModelConfig {
   /** GTCRN model configuration. */
@@ -4107,6 +4132,8 @@ typedef struct SherpaOnnxOfflineSpeechDenoiserModelConfig {
   const char *provider;
   /** DPDFNet model configuration. */
   SherpaOnnxOfflineSpeechDenoiserDpdfNetModelConfig dpdfnet;
+  /** VoxLock model configuration. */
+  SherpaOnnxOfflineSpeechDenoiserVoxLockModelConfig voxlock;
 } SherpaOnnxOfflineSpeechDenoiserModelConfig;
 
 /** @brief Configuration for offline speech denoising. */

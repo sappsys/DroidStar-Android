@@ -1,6 +1,6 @@
 # DroidStar Android
 
-Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public Android release is **0.45.07a**.
+Android builds of [DroidStar](https://github.com/nostar/DroidStar), tracking upstream **0.45.07**. The current public release is **0.45.07b** (Android APK and Windows x64 zip).
 
 DroidStar is a free, GPL digital ham radio app: DMR on BrandMeister, YSF, M17, P25, NXDN, D-STAR, and AllStar. You need an amateur licence. The phone talks to the network the way a hotspot would.
 
@@ -16,11 +16,11 @@ The iOS app, TestFlight invites, and that changelog stay with VU3LVO. Questions 
 
 ## What this line does
 
-- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of Android 0.45.07a.
+- Builds Android from the current upstream sources. Upstream 0.45.07 is the base of this letter line (public **0.45.07b**).
 - Merges later upstream updates and ships them as the next Android build.
-- Leaves the iOS project intact. Android work is in the `android:` project settings, the `android/` package, and `Q_OS_ANDROID` sections.
+- Leaves the iOS project intact. Android work is in the `android/` package and `Q_OS_ANDROID` sections. Windows packaging lives in `windows/` with `Q_OS_WIN` / desktop gates — same product tree, not a fork.
 
-Further Android builds of the same upstream version use the next letter: `0.45.07b`, then `c`, through `z`. The package code is `450700` plus the letter index (`a` is `450701`) so each letter upgrades in place. The next upstream version, `0.45.08`, can start at `450800`.
+Android and Windows share one product letter for this line: `0.45.07a`, then `b`, through `z`. Further builds of the same upstream version use the next letter on both platforms together. The Android package code is `450700` plus the letter index (`a` is `450701`) so each letter upgrades in place. The next upstream version, `0.45.08`, can start at `450800`. Shared features added on Android or Windows are brought across to the other before the next letter ships, unless a changelog note marks them as platform-only.
 
 ## This Android build
 
@@ -30,9 +30,19 @@ The keystore directory is not committed. To build a signed APK you need your own
 
 The BrandMeister live scanner is HTTPS. Qt for Android does not ship the OpenSSL libraries its TLS plugin loads, so this tree vendors OpenSSL 3.1.8 under `third_party/android_openssl/` (Apache-2.0; see that directory's `LICENSE`).
 
-Shared radio modes, keyboard PTT, and QSO replay (saved as WAV) are in the Android build. Live Activity, Bluetooth PTT, Apple Speech, and the sherpa noise model stay on iOS, where upstream ships them.
+Shared radio modes, keyboard PTT, QSO replay (saved as WAV), and Neural AI TX clarity (GTCRN via sherpa-onnx) are in the Android build. Live Activity, Bluetooth PTT, and Apple Speech stay on iOS.
 
-What 0.45.07 added upstream — QSO Replay, hardware PTT, Simple mode, the BrandMeister and TGIF password check, and the rest of that release — is described in VU3LVO's [changelog](https://www.vu3lvo.com/droidstar/changelog). Each Android letter is recorded in [CHANGELOG-Android.md](CHANGELOG-Android.md).
+### Windows (desktop)
+
+Windows uses the same shared radio code and `ui2026` UI, plus Qt SerialPort for USB AMBE / MMDVM dongles (the nostar desktop path). Packaging mirrors Android: see [windows/README.md](windows/README.md). On a Windows machine with Qt 6.6 x64:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+```
+
+That writes a self-contained folder under `dist/DroidStar-<version>-windows-x64/` (`windeployqt`; no Qt install needed on the user’s PC). Optional Inno Setup script: `windows/installer/DroidStar.iss`.
+
+What 0.45.07 added upstream — QSO Replay, hardware PTT, Simple mode, the BrandMeister and TGIF password check, and the rest of that release — is described in VU3LVO's [changelog](https://www.vu3lvo.com/droidstar/changelog). Each Android letter is recorded in [CHANGELOG-Android.md](CHANGELOG-Android.md); each Windows letter in [CHANGELOG-Windows.md](CHANGELOG-Windows.md).
 
 ## Taking upstream updates
 
@@ -43,7 +53,7 @@ git fetch upstream
 git merge upstream/Main
 ```
 
-After a merge that brings a new upstream version, set that Android release back to `a` when it is updated on the public repo. Update the package code in `DroidStar.pro` and [CHANGELOG-Android.md](CHANGELOG-Android.md), then rebuild. The APK name comes from the version in `DroidStar.pro`.
+After a merge that brings a new upstream version, set that product letter back to `a` when it is updated on the public repo (Android and Windows together). Update the version in `DroidStar.pro`, [CHANGELOG-Android.md](CHANGELOG-Android.md), and [CHANGELOG-Windows.md](CHANGELOG-Windows.md), then rebuild both. The APK and Windows folder names come from that shared version.
 
 ## License
 

@@ -49,16 +49,17 @@ Rectangle {
     Accessible.name: root.text
     Accessible.checkable: true
     Accessible.checked: root.checked
-    Accessible.onToggleAction: root.toggled(!root.checked)
-    Accessible.onPressAction: root.toggled(!root.checked)
+    Accessible.onToggleAction: root.applyToggle(!root.checked)
+    Accessible.onPressAction: root.applyToggle(!root.checked)
 
     Tokens { id: t }
 
-    MouseArea {
-        id: rowMouse
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onClicked: root.toggled(!root.checked)
+    function applyToggle(next) {
+        if (!root.enabled)
+            return
+        if (!!next === !!root.checked)
+            return
+        root.toggled(!!next)
     }
 
     RowLayout {
@@ -67,27 +68,44 @@ Rectangle {
         anchors.rightMargin: 6
         spacing: 8
 
-        ColumnLayout {
-            id: textCol
+        Item {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
-            spacing: 2
-            Label {
-                Layout.fillWidth: true
-                text: root.text
-                font.pixelSize: t.fsBody
-                color: t.text
-                wrapMode: Text.WordWrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
+            Layout.preferredHeight: textCol.implicitHeight
+            implicitHeight: textCol.implicitHeight
+
+            ColumnLayout {
+                id: textCol
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+                Label {
+                    Layout.fillWidth: true
+                    text: root.text
+                    font.pixelSize: t.fsBody
+                    color: t.text
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: root.description !== ""
+                    text: root.description
+                    font.pixelSize: t.fsCaption
+                    color: t.textMuted
+                    wrapMode: Text.WordWrap
+                }
             }
-            Label {
-                Layout.fillWidth: true
-                visible: root.description !== ""
-                text: root.description
-                font.pixelSize: t.fsCaption
-                color: t.textMuted
-                wrapMode: Text.WordWrap
+
+            // Label area only — Switch stays exclusive so desktop clicks cannot double-fire.
+            MouseArea {
+                id: rowMouse
+                anchors.fill: parent
+                preventStealing: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.applyToggle(!root.checked)
             }
         }
 
@@ -96,8 +114,7 @@ Rectangle {
             checked: root.checked
             focusPolicy: Qt.TabFocus
             onToggled: {
-                root.toggled(checked)
-                // A click breaks the binding; restore it so later state changes (e.g. auto IPv6 off) still show.
+                root.applyToggle(checked)
                 checked = Qt.binding(function() { return root.checked })
             }
         }

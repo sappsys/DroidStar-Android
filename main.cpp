@@ -1,4 +1,9 @@
+#include <QtGlobal>
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
 #include <QGuiApplication>
+#else
+#include <QApplication>
+#endif
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QIcon>
@@ -21,7 +26,12 @@
 
 int main(int argc, char *argv[])
 {
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
     QGuiApplication app(argc, argv);
+#else
+    // QApplication so desktop settings export/restore can use native QFileDialog.
+    QApplication app(argc, argv);
+#endif
     QCoreApplication::setOrganizationName(QStringLiteral("dudetronics"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("dudetronics.org"));
     QCoreApplication::setApplicationName(QStringLiteral("droidstar"));
@@ -33,11 +43,15 @@ int main(int argc, char *argv[])
     // Use Material styling for a modern dark UI (Fusion defaults to a light palette).
     QQuickStyle::setStyle("Material");
     // QRC icon (registered via `DroidStar.pro` resources.files)
+#if defined(Q_OS_ANDROID) || defined(Q_OS_WIN)
+    app.setWindowIcon(QIcon(":/DroidStar/images/droidstar_android.png"));
+#else
     app.setWindowIcon(QIcon(":/DroidStar/images/droidstar.png"));
-    
+#endif
+
     // Register DroidStar type
     qmlRegisterType<DroidStar>("org.dudetronics.droidstar", 1, 0, "DroidStar");
-  
+
     QQmlApplicationEngine engine;
 
     // Local RX transcription engine & Ham Net Reminder manager
@@ -51,12 +65,12 @@ int main(int argc, char *argv[])
     // into it (the capture ring itself is static storage, see QsoReplayCapture.h).
     QsoReplayEngine replayEngine;
     engine.rootContext()->setContextProperty("replayEngine", &replayEngine);
-    
+
     // Create an instance of DroidStar
-        DroidStar droidStarInstance;
-        
-        // Expose the DroidStar instance to QML as a context property
-        engine.rootContext()->setContextProperty("droidStar", &droidStarInstance);
+    DroidStar droidStarInstance;
+
+    // Expose the DroidStar instance to QML as a context property
+    engine.rootContext()->setContextProperty("droidStar", &droidStarInstance);
 
     // Hardware PTT buttons (headset media button, Bluetooth LE buttons, keyboard-type buttons).
     // Declared after DroidStar so it is torn down first and its native callbacks are gone
@@ -68,7 +82,7 @@ int main(int argc, char *argv[])
     // released before the audio session goes away.
     QsoReplayPlayer replayPlayer(&replayEngine);
     engine.rootContext()->setContextProperty("replayPlayer", &replayPlayer);
-    
+
     // Expose instances to QML
     VUIDUpdater vuidUpdater;
     engine.rootContext()->setContextProperty("vuidUpdater", &vuidUpdater);
@@ -85,26 +99,19 @@ int main(int argc, char *argv[])
     LiveActivityQtBridge liveActivity;
     engine.rootContext()->setContextProperty("liveActivity", &liveActivity);
 
-    
-    
-    
-      // Check for FLITE support
-  #ifdef USE_FLITE
-      engine.rootContext()->setContextProperty("USE_FLITE", QVariant(true));
-  #else
-      engine.rootContext()->setContextProperty("USE_FLITE", QVariant(false));
-  #endif
+#ifdef USE_FLITE
+    engine.rootContext()->setContextProperty("USE_FLITE", QVariant(true));
+#else
+    engine.rootContext()->setContextProperty("USE_FLITE", QVariant(false));
+#endif
 
-      // Load the main QML file
-      const QUrl url(u"qrc:/DroidStar/main.qml"_qs);
-      QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
-                       &app, [url](QObject *obj, const QUrl &objUrl) {
-                           if (!obj && url == objUrl)
-                               QCoreApplication::exit(-1);
-                       }, Qt::QueuedConnection);
-      engine.load(url);
+    const QUrl url(u"qrc:/DroidStar/main.qml"_qs);
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
+                     &app, [url](QObject *obj, const QUrl &objUrl) {
+                         if (!obj && url == objUrl)
+                             QCoreApplication::exit(-1);
+                     }, Qt::QueuedConnection);
+    engine.load(url);
 
-    
-      return app.exec();
-    
-  }
+    return app.exec();
+}

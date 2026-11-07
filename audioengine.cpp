@@ -57,11 +57,28 @@ std::atomic<bool> s_globalRxClean { false };
 std::atomic<float> s_globalSpkPreampDb { 6.0f };
 std::atomic<void (*)()> s_stateChangeCallback { nullptr };
 
-void notifyTxEnhancerStateChanged()
+// Track headset / BT / USB mics for logging only. TX enhancements (NR, HD Voice,
+// Mic Leveler) always follow the user's settings on every input device.
+bool looksLikeExternalMicLabel(const QString &s)
 {
-    if (auto cb = s_stateChangeCallback.load(std::memory_order_relaxed)) {
-        cb();
-    }
+    return s.contains(QStringLiteral("AirPods"), Qt::CaseInsensitive)
+        || s.contains(QStringLiteral("Bluetooth"), Qt::CaseInsensitive)
+        || s.contains(QStringLiteral("external_microphone"), Qt::CaseInsensitive)
+        || s.contains(QStringLiteral("Headset"), Qt::CaseInsensitive)
+        || s.contains(QStringLiteral("USB"), Qt::CaseInsensitive)
+        || s.contains(QStringLiteral("External"), Qt::CaseInsensitive);
+}
+
+bool detectExternalMic(const QString &selectedName, const QString &devDesc, const QString &devId)
+{
+    const bool labeled = looksLikeExternalMicLabel(selectedName)
+        || looksLikeExternalMicLabel(devDesc)
+        || looksLikeExternalMicLabel(devId);
+#ifdef Q_OS_IOS
+    return labeled || isIOSExternalMicActive();
+#else
+    return labeled;
+#endif
 }
 
 void ensureEnhancerSettingsLoaded()
@@ -92,10 +109,9 @@ void ensureEnhancerSettingsLoaded()
     s_globalRxClean.store(rxCleanOn, std::memory_order_relaxed);
     s_globalSpkPreampDb.store(preampDb, std::memory_order_relaxed);
 
-    const bool extMic = s_externalMicActive.load(std::memory_order_relaxed);
-    s_globalNoiseMode.store(extMic ? 0 : nrMode, std::memory_order_relaxed);
-    s_globalHdUpscale.store(extMic ? false : hdOn, std::memory_order_relaxed);
-    s_globalTxEnhance.store(extMic ? false : txOn, std::memory_order_relaxed);
+    s_globalNoiseMode.store(nrMode, std::memory_order_relaxed);
+    s_globalHdUpscale.store(hdOn, std::memory_order_relaxed);
+    s_globalTxEnhance.store(txOn, std::memory_order_relaxed);
 #ifdef Q_OS_IOS
     setAppleVoiceIsolationEnabled(viOn);
 #endif
@@ -112,10 +128,9 @@ void AudioEngine::loadSavedUserTxSettings(int nrMode, bool hdOn, bool txOn, bool
     s_savedUserTxEnhance.store(txOn, std::memory_order_relaxed);
     s_globalVoiceIsolation.store(viOn, std::memory_order_relaxed);
 
-    const bool extMic = s_externalMicActive.load(std::memory_order_relaxed);
-    s_globalNoiseMode.store(extMic ? 0 : clampedNr, std::memory_order_relaxed);
-    s_globalHdUpscale.store(extMic ? false : hdOn, std::memory_order_relaxed);
-    s_globalTxEnhance.store(extMic ? false : txOn, std::memory_order_relaxed);
+    s_globalNoiseMode.store(clampedNr, std::memory_order_relaxed);
+    s_globalHdUpscale.store(hdOn, std::memory_order_relaxed);
+    s_globalTxEnhance.store(txOn, std::memory_order_relaxed);
 }
 
 int AudioEngine::savedUserNoiseMode()
@@ -140,23 +155,15 @@ void AudioEngine::setExternalMicActive(bool externalActive)
 {
     ensureEnhancerSettingsLoaded();
     const bool prev = s_externalMicActive.exchange(externalActive, std::memory_order_acq_rel);
-    if (externalActive) {
-        // When mic is Bluetooth, wired headset, or external (not built-in), auto-disable all TX enhancements
-        s_globalNoiseMode.store(static_cast<int>(AudioEnhancer::NoiseOff), std::memory_order_relaxed);
-        s_globalHdUpscale.store(false, std::memory_order_relaxed);
-        s_globalTxEnhance.store(false, std::memory_order_relaxed);
-    } else {
-        // When mic is back to built-in, roll back to the user's saved persisted config state
-        s_globalNoiseMode.store(s_savedUserNoiseMode.load(std::memory_order_relaxed), std::memory_order_relaxed);
-        s_globalHdUpscale.store(s_savedUserHdUpscale.load(std::memory_order_relaxed), std::memory_order_relaxed);
-        s_globalTxEnhance.store(s_savedUserTxEnhance.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    }
     if (prev != externalActive) {
+        // Tracking only — never mutate TX NR / HD / Mic Leveler, and do not emit
+        // update_settings (that used to snap the Settings toggles off on every PTT
+        // when capture re-opened a USB/Headset mic).
         qInfo() << "[AudioEngine] External/Bluetooth/Wired mic active =" << externalActive
-                << "-> Effective TX NR=" << s_globalNoiseMode.load(std::memory_order_relaxed)
+                << "(TX NR/HD/Mic Leveler unchanged; user settings apply on all mics)"
+                << "TX NR=" << s_globalNoiseMode.load(std::memory_order_relaxed)
                 << "HD=" << s_globalHdUpscale.load(std::memory_order_relaxed)
                 << "MicLeveler=" << s_globalTxEnhance.load(std::memory_order_relaxed);
-        notifyTxEnhancerStateChanged();
     }
 }
 
@@ -175,12 +182,6 @@ void AudioEngine::setGlobalNoiseMode(int mode)
 {
     ensureEnhancerSettingsLoaded();
     const int clamped = std::clamp(mode, 0, 2);
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        // Keep TX enhancements disabled while on external mic without clobbering saved user config
-        s_globalNoiseMode.store(0, std::memory_order_relaxed);
-        notifyTxEnhancerStateChanged();
-        return;
-    }
     s_savedUserNoiseMode.store(clamped, std::memory_order_relaxed);
     s_globalNoiseMode.store(clamped, std::memory_order_relaxed);
 }
@@ -188,20 +189,12 @@ void AudioEngine::setGlobalNoiseMode(int mode)
 int AudioEngine::globalNoiseMode()
 {
     ensureEnhancerSettingsLoaded();
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        return 0;
-    }
     return s_globalNoiseMode.load(std::memory_order_relaxed);
 }
 
 void AudioEngine::setGlobalHdUpscale(bool enabled)
 {
     ensureEnhancerSettingsLoaded();
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        s_globalHdUpscale.store(false, std::memory_order_relaxed);
-        notifyTxEnhancerStateChanged();
-        return;
-    }
     s_savedUserHdUpscale.store(enabled, std::memory_order_relaxed);
     s_globalHdUpscale.store(enabled, std::memory_order_relaxed);
 }
@@ -209,20 +202,12 @@ void AudioEngine::setGlobalHdUpscale(bool enabled)
 bool AudioEngine::globalHdUpscale()
 {
     ensureEnhancerSettingsLoaded();
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        return false;
-    }
     return s_globalHdUpscale.load(std::memory_order_relaxed);
 }
 
 void AudioEngine::setGlobalTxEnhance(bool enabled)
 {
     ensureEnhancerSettingsLoaded();
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        s_globalTxEnhance.store(false, std::memory_order_relaxed);
-        notifyTxEnhancerStateChanged();
-        return;
-    }
     s_savedUserTxEnhance.store(enabled, std::memory_order_relaxed);
     s_globalTxEnhance.store(enabled, std::memory_order_relaxed);
 }
@@ -230,9 +215,6 @@ void AudioEngine::setGlobalTxEnhance(bool enabled)
 bool AudioEngine::globalTxEnhance()
 {
     ensureEnhancerSettingsLoaded();
-    if (s_externalMicActive.load(std::memory_order_relaxed)) {
-        return false;
-    }
     return s_globalTxEnhance.load(std::memory_order_relaxed);
 }
 
@@ -630,27 +612,7 @@ void AudioEngine::initCaptureSource()
 
     const QString devDesc = device.description();
     const QString devId   = QString::fromUtf8(device.id());
-    bool isExtMic = m_inputdevice.contains("AirPods", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("Bluetooth", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("External", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("Headset", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("USB", Qt::CaseInsensitive) ||
-                    devDesc.contains("AirPods", Qt::CaseInsensitive) ||
-                    devDesc.contains("Bluetooth", Qt::CaseInsensitive) ||
-                    devDesc.contains("External", Qt::CaseInsensitive) ||
-                    devDesc.contains("Headset", Qt::CaseInsensitive) ||
-                    devDesc.contains("USB", Qt::CaseInsensitive) ||
-                    devId.contains("airpods", Qt::CaseInsensitive) ||
-                    devId.contains("bluetooth", Qt::CaseInsensitive) ||
-                    devId.contains("external_microphone", Qt::CaseInsensitive) ||
-                    devId.contains("headset", Qt::CaseInsensitive) ||
-                    devId.contains("usb", Qt::CaseInsensitive);
-#ifdef Q_OS_IOS
-    if (isIOSExternalMicActive()) {
-        isExtMic = true;
-    }
-#endif
-    setExternalMicActive(isExtMic);
+    setExternalMicActive(detectExternalMic(m_inputdevice, devDesc, devId));
 
     QAudioFormat format;
     format.setSampleRate(8000);
@@ -1475,17 +1437,9 @@ void AudioEngine::setOutputDevice(const QString &deviceName) {
 
 void AudioEngine::setInputDevice(const QString &deviceName) {
     m_inputdevice = deviceName;
-    bool isExtMic = m_inputdevice.contains("AirPods", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("Bluetooth", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("External", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("Headset", Qt::CaseInsensitive) ||
-                    m_inputdevice.contains("USB", Qt::CaseInsensitive);
-#ifdef Q_OS_IOS
-    if (isIOSExternalMicActive()) {
-        isExtMic = true;
-    }
-#endif
-    setExternalMicActive(isExtMic);
+    // Full device description is applied again in initCaptureSource(); this covers
+    // friendly-name picks (AirPods / Bluetooth) before the capture graph restarts.
+    setExternalMicActive(detectExternalMic(m_inputdevice, QString(), QString()));
     if (m_in != nullptr) {
         const bool wasActive = (m_indev != nullptr && m_in->state() != QAudio::StoppedState);
         stop_capture();

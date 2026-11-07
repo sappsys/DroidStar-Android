@@ -17,7 +17,9 @@
 
 #include "AudioEnhancer.h"
 
-#if defined(Q_OS_IOS) && !defined(Q_OS_IOS_APP_EXTENSION)
+#if (defined(Q_OS_IOS) && !defined(Q_OS_IOS_APP_EXTENSION)) \
+    || defined(Q_OS_WIN) \
+    || defined(Q_OS_ANDROID)
 #include "third_party/sherpa-onnx/include/sherpa-onnx/c-api/c-api.h"
 #define DS_ENHANCER_HAS_SHERPA 1
 #else

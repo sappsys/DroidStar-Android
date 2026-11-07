@@ -60,7 +60,7 @@ public:
     static void setGlobalSpkPreampDb(float db);
     static float globalSpkPreampDb();
 
-    // Saved user persisted config vs automatic external-mic bypass
+    // Saved user TX audio config. External/headset mic is tracked only; enhancements apply on all inputs.
     static void loadSavedUserTxSettings(int nrMode, bool hdOn, bool txOn, bool viOn);
     static int savedUserNoiseMode();
     static bool savedUserHdUpscale();

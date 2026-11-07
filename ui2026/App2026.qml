@@ -31,13 +31,15 @@ ApplicationWindow {
     id: window
 
     readonly property bool isMobile: (Qt.platform.os === "ios" || Qt.platform.os === "android")
+    readonly property bool isWindows: Qt.platform.os === "windows"
 
     visible: true
     visibility: isMobile ? Window.FullScreen : Window.Windowed
-    width: isMobile ? Screen.width : 430
-    height: isMobile ? Screen.height : 820
-    minimumWidth: isMobile ? 0 : 320
-    minimumHeight: isMobile ? 0 : 480
+    // Desktop (Windows/Linux/macOS) uses a resizable window; phone UI stays full screen.
+    width: isMobile ? Screen.width : (isWindows ? 1100 : 430)
+    height: isMobile ? Screen.height : (isWindows ? 720 : 820)
+    minimumWidth: isMobile ? 0 : (isWindows ? 900 : 320)
+    minimumHeight: isMobile ? 0 : (isWindows ? 560 : 480)
     title: qsTr("DroidStar")
 
     Tokens { id: t }
@@ -460,6 +462,7 @@ ApplicationWindow {
         property int noiseReductionMode: 2
         property bool hdUpscale: true
         property bool txEnhance: false
+        property bool externalMicActive: false
         property bool voiceIsolation: false
         property bool rxClean: false
         property real micGain: 0.5
@@ -1055,18 +1058,27 @@ ApplicationWindow {
             appState.bmOdtp = !!droidstar.get_bm_odtp()
         if (typeof droidstar.is_odtp_active === "function")
             appState.odtpActive = !!droidstar.is_odtp_active()
-        if (typeof droidstar.get_noise_reduction_mode === "function")
-            appState.noiseReductionMode = droidstar.get_noise_reduction_mode()
-        if (typeof droidstar.get_hd_upscale === "function")
-            appState.hdUpscale = !!droidstar.get_hd_upscale()
-        if (typeof droidstar.get_tx_enhance === "function")
-            appState.txEnhance = !!droidstar.get_tx_enhance()
+        // TX clarity toggles (NR / HD Voice / Mic Leveler) are owned by the setters
+        // below. Do not pull them on every update_settings — capture start on PTT used
+        // to emit that signal and snap the switches off mid-QSO.
+        if (typeof droidstar.is_external_mic_active === "function")
+            appState.externalMicActive = !!droidstar.is_external_mic_active()
         if (typeof droidstar.get_voice_isolation === "function")
             appState.voiceIsolation = !!droidstar.get_voice_isolation()
         if (typeof droidstar.get_rx_clean === "function")
             appState.rxClean = !!droidstar.get_rx_clean()
         if (typeof droidstar.get_spk_preamp_db === "function")
             appState.spkPreampDb = Math.max(0, Math.min(24, Number(droidstar.get_spk_preamp_db()) || 0))
+    }
+
+    function syncTxClarityFromBackend() {
+        if (!droidstar) return
+        if (typeof droidstar.get_noise_reduction_mode === "function")
+            appState.noiseReductionMode = droidstar.get_noise_reduction_mode()
+        if (typeof droidstar.get_hd_upscale === "function")
+            appState.hdUpscale = !!droidstar.get_hd_upscale()
+        if (typeof droidstar.get_tx_enhance === "function")
+            appState.txEnhance = !!droidstar.get_tx_enhance()
     }
 
     function _onSettingsUpdated() {
@@ -1159,6 +1171,7 @@ ApplicationWindow {
 
             // Sync all other settings from QSettings
             syncSettingsFromBackend()
+            syncTxClarityFromBackend()
 
             if (controlSettings.smsRestoreTg !== "") {
                 window.smsStandbyRestoreTg = controlSettings.smsRestoreTg
@@ -1404,39 +1417,21 @@ ApplicationWindow {
     function setAgc(on) { appState.agc = on; if (droidstar) droidstar.set_agc(on) }
     function setNoiseReductionMode(mode) {
         var m = Math.max(0, Math.min(2, mode | 0))
-        if (droidstar && typeof droidstar.set_noise_reduction_mode === "function") {
+        appState.noiseReductionMode = m
+        if (droidstar && typeof droidstar.set_noise_reduction_mode === "function")
             droidstar.set_noise_reduction_mode(m)
-            if (typeof droidstar.get_noise_reduction_mode === "function")
-                appState.noiseReductionMode = droidstar.get_noise_reduction_mode()
-            else
-                appState.noiseReductionMode = m
-        } else {
-            appState.noiseReductionMode = m
-        }
     }
     function setHdUpscale(on) {
         var v = !!on
-        if (droidstar && typeof droidstar.set_hd_upscale === "function") {
+        appState.hdUpscale = v
+        if (droidstar && typeof droidstar.set_hd_upscale === "function")
             droidstar.set_hd_upscale(v)
-            if (typeof droidstar.get_hd_upscale === "function")
-                appState.hdUpscale = !!droidstar.get_hd_upscale()
-            else
-                appState.hdUpscale = v
-        } else {
-            appState.hdUpscale = v
-        }
     }
     function setTxEnhance(on) {
         var v = !!on
-        if (droidstar && typeof droidstar.set_tx_enhance === "function") {
+        appState.txEnhance = v
+        if (droidstar && typeof droidstar.set_tx_enhance === "function")
             droidstar.set_tx_enhance(v)
-            if (typeof droidstar.get_tx_enhance === "function")
-                appState.txEnhance = !!droidstar.get_tx_enhance()
-            else
-                appState.txEnhance = v
-        } else {
-            appState.txEnhance = v
-        }
     }
     function setVoiceIsolation(on) {
         appState.voiceIsolation = !!on
@@ -2774,8 +2769,8 @@ ApplicationWindow {
                                 id: drawerLogo
                                 anchors.fill: parent
                                 anchors.margins: 4
-                                readonly property bool androidBuild: Qt.platform.os === "android"
-                                source: androidBuild
+                                readonly property bool m8nlrBuild: Qt.platform.os === "android" || Qt.platform.os === "windows"
+                                source: m8nlrBuild
                                         ? "qrc:/DroidStar/images/droidstar_android.png"
                                         : "qrc:/DroidStar/images/droidstar.png"
                                 sourceSize.width: 128
@@ -2787,7 +2782,7 @@ ApplicationWindow {
                                 onStatusChanged: {
                                     // Dev/build fallback: if QRC is missing, try relative file (keeps UI usable).
                                     if (status === Image.Error) {
-                                        source = androidBuild
+                                        source = m8nlrBuild
                                                  ? Qt.resolvedUrl("../images/droidstar_android.png")
                                                  : Qt.resolvedUrl("../images/droidstar.png")
                                     }
@@ -2849,7 +2844,7 @@ ApplicationWindow {
                 Item { Layout.fillHeight: true; Layout.minimumHeight: 8 }
 
                 Label {
-                    visible: Qt.platform.os !== "android"
+                    visible: !window.isWindows && Qt.platform.os !== "android"
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: qsTr("Made with \u2665  VU3LVO")
@@ -2859,7 +2854,7 @@ ApplicationWindow {
                 }
 
                 DonateButtons {
-                    visible: Qt.platform.os !== "android"
+                    visible: !window.isWindows && Qt.platform.os !== "android"
                     Layout.fillWidth: true
                     buttonHeight: drawerColumn.compactMenu ? 40 : 46
                 }
@@ -3309,8 +3304,8 @@ ApplicationWindow {
                 Image {
                     id: splashFullLogo
                     anchors.fill: parent
-                    readonly property bool androidBuild: Qt.platform.os === "android"
-                    source: androidBuild
+                    readonly property bool m8nlrBuild: Qt.platform.os === "android" || Qt.platform.os === "windows"
+                    source: m8nlrBuild
                             ? "qrc:/DroidStar/images/droidstar_android_logo.png"
                             : "qrc:/DroidStar/images/droidstar_logo.png"
                     sourceSize.width: 1024
@@ -3320,7 +3315,7 @@ ApplicationWindow {
                     mipmap: true
                     onStatusChanged: {
                         if (status === Image.Error) {
-                            source = androidBuild
+                            source = m8nlrBuild
                                      ? Qt.resolvedUrl("../images/droidstar_android_logo.png")
                                      : Qt.resolvedUrl("../images/droidstar_logo.png")
                         }
@@ -3469,7 +3464,7 @@ ApplicationWindow {
                 text: {
                     if (!window.initialized)
                         return qsTr("Initializing Digital Voice Engine…")
-                    return Qt.platform.os === "android"
+                    return (Qt.platform.os === "android" || window.isWindows)
                            ? qsTr("Ready • 73 de M8NLR")
                            : qsTr("Ready • 73 de VU3LVO")
                 }
