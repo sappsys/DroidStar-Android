@@ -1,11 +1,12 @@
 QT += quick quickcontrols2 network multimedia core gui concurrent
 
-unix:!ios:QT += serialport
+unix:!ios:!android:QT += serialport
 win32:QT += serialport
 !win32:LIBS += -ldl
 win32:LIBS += -lws2_32
 win32:QMAKE_LFLAGS += -static
 QMAKE_LFLAGS_WINDOWS += --enable-stdcall-fixup
+VERSION = 0.45.07
 RC_ICONS = images/droidstar.ico
 ICON = images/droidstar.icns
 macx:LIBS += -framework AVFoundation -framework Accelerate -framework Metal -framework MetalKit
@@ -38,7 +39,6 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         CRCenc.cpp \
         vuidupdater.cpp \
-        iosshare.mm \
         LogHandler.cpp \
        Golay24128.cpp \
         M17Convolution.cpp \
@@ -103,14 +103,15 @@ SOURCES += \
         third_party/whisper/ggml-backend.c \
         third_party/whisper/ggml-quants.c
 # Android-specific source files
-android:SOURCES += androidserialport.cpp
+android:QT += core-private
+android:SOURCES += androidserialport.cpp android_platform.cpp
 
 # Non-iOS source files
 !ios:SOURCES += serialambe.cpp serialmodem.cpp
 
 # Objective-C source files for macOS and iOS
 macx:OBJECTIVE_SOURCES += micpermission.mm ios_notifications.mm third_party/whisper/ggml-metal.m
-ios:OBJECTIVE_SOURCES += micpermission.mm AudioSessionManager.mm ios_ble_ptt.mm
+ios:OBJECTIVE_SOURCES += micpermission.mm AudioSessionManager.mm ios_ble_ptt.mm iosshare.mm
 ios:HEADERS += ios_ble_ptt.h
 ios:OBJECTIVE_SOURCES += ios_live_activity.mm ios_notifications.mm ios_speech_recognizer.mm third_party/whisper/ggml-metal.m
 ios:OBJECTIVE_SOURCES += ReplayAacWriter.mm ios_replay_player.mm
@@ -322,16 +323,20 @@ SOURCES += \
 android:HEADERS += androidserialport.h
 macx:HEADERS += micpermission.h
 !ios:HEADERS += serialambe.h serialmodem.h
-android:ANDROID_VERSION_CODE = 79
-android:QT_ANDROID_MIN_SDK_VERSION = 31
-
-contains(ANDROID_TARGET_ARCH,armeabi-v7a) {
-	ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
-}
-
-contains(ANDROID_TARGET_ARCH,arm64-v8a) {
-	ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
-}
+# Android releases of an iOS version get a letter suffix: 0.45.07a, then b, through z.
+# versionCode is 450700 plus the letter index (a = 1) so each letter upgrades in place,
+# and 0.45.08 can start at 450800.
+android:ANDROID_VERSION_NAME = 0.45.07a
+android:ANDROID_VERSION_CODE = 450701
+android:DEFINES += APP_VERSION=\\\"0.45.07a\\\"
+android:ANDROID_MIN_SDK_VERSION = 31
+android:ANDROID_TARGET_SDK_VERSION = 34
+android:ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+# Qt's Android TLS plugin dlopens OpenSSL 3. Hoseline (the live scanner) is HTTPS,
+# so without these libraries the scan page never leaves "Connecting…".
+android:ANDROID_EXTRA_LIBS += \
+    $$PWD/third_party/android_openssl/arm64-v8a/libcrypto_3.so \
+    $$PWD/third_party/android_openssl/arm64-v8a/libssl_3.so
 
 contains(DEFINES, USE_FLITE){
 	LIBS += -lflite_cmu_us_slt -lflite_cmu_us_kal16 -lflite_cmu_us_awb -lflite_cmu_us_rms -lflite_usenglish -lflite_cmulex -lflite -lasound

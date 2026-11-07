@@ -26,6 +26,8 @@
 #ifdef Q_OS_ANDROID
 #include <QCoreApplication>
 #include <QJniObject>
+#include <QPermissions>
+extern void android_start_radio_service();
 #endif
 #ifdef Q_OS_IOS
 #include "micpermission.h"
@@ -245,6 +247,8 @@ void DroidStar::keepScreenOn()
     QMicrophonePermission microphonePermission;
     if (qApp->checkPermission(microphonePermission) != Qt::PermissionStatus::Granted) {
         qApp->requestPermission(microphonePermission, this, &DroidStar::keepScreenOn);
+    } else {
+        android_start_radio_service();
     }
 }
 

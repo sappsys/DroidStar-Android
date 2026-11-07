@@ -19,8 +19,10 @@
 #define SERIALAMBE_H
 
 #include <QObject>
+#include <QMap>
+#ifndef Q_OS_ANDROID
 #include <QSerialPort>
-#ifdef Q_OS_ANDROID
+#else
 #include "androidserialport.h"
 #endif
 #include <QQueue>

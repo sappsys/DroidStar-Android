@@ -19,3 +19,4 @@ aqtinstall.log
 android/.gradle/
 android/.idea/
 android/local.properties
+dist/*.apk

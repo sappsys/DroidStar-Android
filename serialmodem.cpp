@@ -21,6 +21,16 @@
 #include "serialmodem.h"
 #include "MMDVMDefines.h"
 
+#ifdef Q_OS_ANDROID
+#include <QIODevice>
+namespace QSerialPort {
+enum DataBits { Data8 = 8 };
+enum StopBits { OneStop = 1 };
+enum Parity { NoParity = 0 };
+enum FlowControl { HardwareControl = 1 };
+}
+#endif
+
 //#define DEBUGHW
 
 SerialModem::SerialModem(QString mode)

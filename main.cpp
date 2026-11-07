@@ -25,6 +25,11 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName(QStringLiteral("dudetronics"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("dudetronics.org"));
     QCoreApplication::setApplicationName(QStringLiteral("droidstar"));
+#ifdef APP_VERSION
+    QCoreApplication::setApplicationVersion(QStringLiteral(APP_VERSION));
+#else
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.45.07"));
+#endif
     // Use Material styling for a modern dark UI (Fusion defaults to a light palette).
     QQuickStyle::setStyle("Material");
     // QRC icon (registered via `DroidStar.pro` resources.files)

@@ -15,16 +15,18 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <QDebug>
+#include <QJniEnvironment>
+#include <QJniObject>
 #include "androidserialport.h"
 
 #ifdef Q_OS_ANDROID
 
 AndroidSerialPort::AndroidSerialPort(QObject *)
 {
-	if(QAndroidJniObject::isClassAvailable("com.hoho.android.usbserial.driver/UsbSerialDriver")) {
-		qDebug() << "com.hoho.android.usbserial.driver/UsbSerialDriver available";
-		serialJavaObject = QAndroidJniObject("DroidStar/USBSerialWrapper");
-        QAndroidJniEnvironment env;
+	if(QJniObject::isClassAvailable("com/hoho/android/usbserial/driver/UsbSerialDriver")) {
+		qDebug() << "USB serial driver available";
+		serialJavaObject = QJniObject("DroidStar/USBSerialWrapper");
+        QJniEnvironment env;
         JNINativeMethod methods[] = { {"data_received", "([B)V", reinterpret_cast<void*>(java_data_received)}, {"device_open", "()V", reinterpret_cast<void*>(java_device_open)}, {"device_denied", "()V", reinterpret_cast<void*>(java_device_denied)}, {"devices_changed", "()V", reinterpret_cast<void*>(java_devices_changed)}};
 		jclass objectClass = env->GetObjectClass(serialJavaObject.object<jobject>());
 		env->RegisterNatives(objectClass, methods, sizeof(methods) / sizeof(methods[0]));
@@ -37,13 +39,16 @@ AndroidSerialPort::AndroidSerialPort(QObject *)
 
 QStringList AndroidSerialPort::discover_devices()
 {
-	QAndroidJniEnvironment env;
+	QJniEnvironment env;
 	QStringList l;
 	l.clear();
 	qDebug() << "AndroidSerialPort::discover_devices()";
     auto activity = QJniObject(QNativeInterface::QAndroidApplication::context());
-    QAndroidJniObject d = serialJavaObject.callObjectMethod("discover_devices", "(Landroid/content/Context;)[Ljava/lang/String;", activity.object());
+    QJniObject d = serialJavaObject.callObjectMethod("discover_devices", "(Landroid/content/Context;)[Ljava/lang/String;", activity.object());
 	jobjectArray devices = d.object<jobjectArray>();
+	if (!devices) {
+		return l;
+	}
 	int size = env->GetArrayLength(devices);
 
 	for (int i=0; i < size; ++i) {
@@ -68,7 +73,7 @@ void AndroidSerialPort::close()
 
 int AndroidSerialPort::write(char *data, int s)
 {
-	QAndroidJniEnvironment env;
+	QJniEnvironment env;
 	jbyteArray buffer = env->NewByteArray(s);
 	env->SetByteArrayRegion(buffer, 0, s, (jbyte *)data);
 	serialJavaObject.callMethod<void>("write", "([B)V", buffer);
@@ -78,7 +83,7 @@ int AndroidSerialPort::write(char *data, int s)
 
 int AndroidSerialPort::write(QByteArray data)
 {
-	QAndroidJniEnvironment env;
+	QJniEnvironment env;
 	jbyteArray buffer = env->NewByteArray(data.size());
 	env->SetByteArrayRegion(buffer, 0, data.size(), (jbyte *)data.data());
 	serialJavaObject.callMethod<void>("write", "([B)V", buffer);
@@ -88,7 +93,7 @@ int AndroidSerialPort::write(QByteArray data)
 
 void AndroidSerialPort::setPortName(QString s)
 {
-	QAndroidJniObject p = QAndroidJniObject::fromString(s);
+	QJniObject p = QJniObject::fromString(s);
 	jstring j = p.object<jstring>();
 	serialJavaObject.callMethod<void>("set_port_name", "(Ljava/lang/String;)V", j);
 }
