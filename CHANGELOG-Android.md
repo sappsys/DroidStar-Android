@@ -4,6 +4,10 @@ Android letter releases of DroidStar. Upstream notes stay with VU3LVO: [vu3lvo.c
 
 Android and Windows share the same product letter for this line (`0.45.07a`, then `b`, and so on). A letter is assigned only when that build is updated on the public repo. A new upstream version starts again at `a`. Further public builds of the same upstream version use the next letter. The package code is the upstream number times 100, plus the letter index (`a` is 1). Shared features added on either platform are brought across to the other before the next letter ships, unless a note here marks them as platform-only.
 
+## Unreleased
+
+Not on the public repo yet. These notes move under the next letter when that update is published. Local builds already report **0.45.07d**, matching Windows.
+
 ## 0.45.07c
 
 Package code 450703. Tracks upstream 0.45.07. Shared letter with Windows.

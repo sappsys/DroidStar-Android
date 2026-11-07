@@ -4,6 +4,10 @@ Windows letter releases of DroidStar. Upstream notes stay with VU3LVO: [vu3lvo.c
 
 Android and Windows share the same product letter for this line (`0.45.07a`, then `b`, and so on). A letter is assigned only when that build is updated on the public repo. A new upstream version starts again at `a`. Shared features added on either platform are brought across to the other before the next letter ships, unless a note here marks them as platform-only (for example Android APK updates, or Windows USB serial dongles).
 
+## Unreleased
+
+Not on the public repo yet. These notes move under the next letter when that update is published. Local builds already report **0.45.07d**, matching Android.
+
 ## 0.45.07c
 
 Package name `DroidStar-0.45.07c-windows-x64` (folder or zip). Shared letter with Android.
